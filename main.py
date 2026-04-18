@@ -1,8 +1,9 @@
 import sys
 import os
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QLabel,
-    QPushButton, QListWidget, QFileDialog, QMessageBox,QAbstractItemView
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QPushButton, QListWidget, QFileDialog, QMessageBox, QAbstractItemView,
+    QLineEdit
 )
 
 
@@ -13,6 +14,7 @@ class FileCleanerApp(QWidget):
         self.setGeometry(100, 100, 600, 400)
 
         self.selected_folder = ""
+        self.all_files = []
 
         layout = QVBoxLayout()
 
@@ -23,12 +25,48 @@ class FileCleanerApp(QWidget):
         self.select_button.clicked.connect(self.select_folder)
         layout.addWidget(self.select_button)
 
+        button_row = QHBoxLayout()
+
+        self.or_button = QPushButton("Include any keywords")
+        self.or_button.setCheckable(True)
+        self.or_button.clicked.connect(self.toggle_or)
+
+        self.and_button = QPushButton("Include all keywords")
+        self.and_button.setCheckable(True)
+        self.and_button.clicked.connect(self.toggle_and)
+
+        self.include_keywords = set()
+        self.exclude_keywords = set()
+
+        self.keyword_container = QWidget()
+        self.keyword_layout = QHBox()
+
+        button_row.addWidget(self.or_button)
+        button_row.addWidget(self.and_button)
+
+        layout.addLayout(button_row)
+
+        self.keyword_input = QLineEdit()
+        self.keyword_input.setPlaceholderText("Search by keyword in file names")
+        self.keyword_input.textChanged.connect(self.filter_files)
+        self.keyword_input.returnPressed.connect(self.add_keyword_include)
+        layout.addWidget(self.keyword_input)
+
         # self.scan_button = QPushButton("Scan Files")
         # self.scan_button.clicked.connect(self.scan_files)
         # layout.addWidget(self.scan_button)
+        self.file_list_label = QLabel("Files")
+        layout.addWidget(self.file_list_label)
         self.file_list = QListWidget()
         self.file_list.setSelectionMode(QAbstractItemView.MultiSelection) #allows us to select multiple files
         layout.addWidget(self.file_list)
+
+        # Set up for the directory list
+        self.dir_list_label = QLabel("Directories")
+        layout.addWidget(self.dir_list_label)
+        self.dir_list = QListWidget()
+        self.dir_list.setSelectionMode(QAbstractItemView.MultiSelection) #allows us to select multiple files
+        # layout.addWidget(self.dir_list)
 
         self.select_all_button = QPushButton("Select All Files")
         self.select_all_button.clicked.connect(self.file_list.selectAll)
@@ -58,13 +96,51 @@ class FileCleanerApp(QWidget):
             QMessageBox.warning(self, "Warning", "Please select a folder first.")
             return
 
-        self.file_list.clear()
+        self.all_files.clear()
+        self.dir_list.clear()
 
-        for file_name in os.listdir(self.selected_folder):
-            full_path = os.path.join(self.selected_folder, file_name)
+        self.scan_files_recursive(self.selected_folder)
+        self.filter_files()
+
+    def scan_files_recursive(self, folder):
+        rec_dir = []
+
+        #Go through the folder and add all the files to the file list
+        for file_name in os.listdir(folder):
+            full_path = os.path.join(folder, file_name)
 
             if os.path.isfile(full_path):
-                self.file_list.addItem(full_path)
+                self.all_files.append(full_path)
+            elif(os.path.isdir(full_path)):
+                #add all the folders to rec_dir
+                rec_dir.append(full_path)
+        
+        
+        #If rec_dir empty return
+        if(len(rec_dir) == 0):
+            return
+
+        #Then in a foreach loop call this on all the folders in rec_dir
+        for recFolder in rec_dir:
+            self.scan_files_recursive(recFolder)
+
+    def refresh_file_list(self, files_to_show):
+        self.file_list.clear()
+        for file_path in files_to_show:
+            self.file_list.addItem(file_path)
+
+    def filter_files(self):
+        keyword = self.keyword_input.text().strip().lower()
+
+        if not keyword:
+            self.refresh_file_list(self.all_files)
+            return
+
+        filtered_files = [
+            file_path for file_path in self.all_files
+            if keyword in os.path.basename(file_path).lower()
+        ]
+        self.refresh_file_list(filtered_files)
 
 
     def delete_files(self):
@@ -83,10 +159,32 @@ class FileCleanerApp(QWidget):
 
         if reply == QMessageBox.Yes:
             for item in selected_items:
+                file_path = item.text()
+                if file_path in self.all_files:
+                    self.all_files.remove(file_path)
                 # replace with os.remove(file_path) when actually ready to delete files
                 self.file_list.takeItem(self.file_list.row(item))
 
             QMessageBox.information(self, "Done", "Selected files removed from the list.")
+
+    def toggle_or(self):
+        if self.or_button.isChecked():
+            self.and_button.setEnabled(False)
+        else:
+            self.and_button.setEnabled(True)
+    
+    def toggle_and(self):
+        if self.and_button.isChecked():
+            self.or_button.setEnabled(False)
+        else:
+            self.or_button.setEnabled(True)
+
+    def add_keyword_include(self):
+        keyword = self.keyword_input.text()
+        self.include_keywords.add(keyword)
+        print(self.include_keywords)
+
+
 
 
 if __name__ == "__main__":
