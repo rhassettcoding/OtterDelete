@@ -1,10 +1,14 @@
 import sys
 import os
+import time
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel,
-    QPushButton, QListWidget, QFileDialog, QMessageBox,QAbstractItemView
+    QPushButton, QListWidget, QFileDialog, QMessageBox, QAbstractItemView, QComboBox
 )
 
+
+
+modified_past_months_list = [1,3,6,12]
 
 class FileCleanerApp(QWidget):
     def __init__(self):
@@ -13,6 +17,7 @@ class FileCleanerApp(QWidget):
         self.setGeometry(100, 100, 600, 400)
 
         self.selected_folder = ""
+        self.selected_modified_past = modified_past_months_list[0]
 
         layout = QVBoxLayout()
 
@@ -22,6 +27,14 @@ class FileCleanerApp(QWidget):
         self.select_button = QPushButton("Select Folder")
         self.select_button.clicked.connect(self.select_folder)
         layout.addWidget(self.select_button)
+
+        # Time period selector
+        self.time_period_label = QLabel("Files modified past (months):")
+        layout.addWidget(self.time_period_label)
+        self.time_period_combo = QComboBox()
+        self.time_period_combo.addItems([str(months) for months in modified_past_months_list])
+        self.time_period_combo.currentIndexChanged.connect(self.on_time_period_changed)
+        layout.addWidget(self.time_period_combo)
 
         # self.scan_button = QPushButton("Scan Files")
         # self.scan_button.clicked.connect(self.scan_files)
@@ -50,6 +63,11 @@ class FileCleanerApp(QWidget):
 
         self.setLayout(layout)
 
+    def on_time_period_changed(self):
+        """Update selected_modified_past when user changes the combo box selection."""
+        selected_index = self.time_period_combo.currentIndex()
+        self.selected_modified_past = modified_past_months_list[selected_index]
+
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder To Scan")
         if folder:
@@ -71,13 +89,7 @@ class FileCleanerApp(QWidget):
         self.dir_list.clear()
 
         self.scan_files_recursive(self.selected_folder)
-        # for file_name in os.listdir(self.selected_folder):
-        #     full_path = os.path.join(self.selected_folder, file_name)
-
-        #     if os.path.isfile(full_path):
-        #         self.file_list.addItem(full_path)
-            # else:
-            #     self.dir_list.addItem(full_path)
+        
 
     def scan_files_recursive(self, folder):
         rec_dir = []
@@ -87,7 +99,17 @@ class FileCleanerApp(QWidget):
             full_path = os.path.join(folder, file_name)
 
             if os.path.isfile(full_path):
-                self.file_list.addItem(full_path)
+                file_last_modified = os.path.getmtime(full_path)
+                file_created = os.path.getctime(full_path)
+                
+                # Check if file was modified past the selected months threshold
+                current_time = time.time()
+                cutoff_time = current_time - (self.selected_modified_past * 30 * 24 * 60 * 60)
+                
+                if file_last_modified < cutoff_time:
+                    self.file_list.addItem(full_path)
+                
+                
             elif(os.path.isdir(full_path)):
                 #add all the folders to rec_dir
                 rec_dir.append(full_path)
