@@ -3,7 +3,7 @@ import os
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QListWidget, QFileDialog, QMessageBox, QAbstractItemView,
-    QLineEdit
+    QLineEdit, QFrame
 )
 
 
@@ -38,19 +38,33 @@ class FileCleanerApp(QWidget):
         self.include_keywords = set()
         self.exclude_keywords = set()
 
-        self.keyword_container = QWidget()
-        self.keyword_layout = QHBox()
-
         button_row.addWidget(self.or_button)
         button_row.addWidget(self.and_button)
 
         layout.addLayout(button_row)
 
+        
+        self.keyword_container = QWidget()
+        self.keyword_layout = QHBoxLayout()
+        self.keyword_container.setLayout(self.keyword_layout)
+
+
         self.keyword_input = QLineEdit()
         self.keyword_input.setPlaceholderText("Search by keyword in file names")
-        self.keyword_input.textChanged.connect(self.filter_files)
         self.keyword_input.returnPressed.connect(self.add_keyword_include)
-        layout.addWidget(self.keyword_input)
+        self.keyword_layout.addWidget(self.keyword_input)
+        layout.addWidget(self.keyword_container)
+
+        self.exclude_container = QWidget()
+        self.exclude_layout = QHBoxLayout()
+        self.exclude_container.setLayout(self.exclude_layout)
+
+        self.exclude_button = QPushButton("Excluded keywords")
+        self.exclude_button.clicked.connect(self.exclude_init)
+        self.exclude_layout.addWidget(self.exclude_button)
+
+        layout.addWidget(self.exclude_container)
+
 
         # self.scan_button = QPushButton("Scan Files")
         # self.scan_button.clicked.connect(self.scan_files)
@@ -130,16 +144,49 @@ class FileCleanerApp(QWidget):
             self.file_list.addItem(file_path)
 
     def filter_files(self):
-        keyword = self.keyword_input.text().strip().lower()
 
-        if not keyword:
+        if not self.include_keywords and not self.exclude_keywords:
             self.refresh_file_list(self.all_files)
             return
 
-        filtered_files = [
-            file_path for file_path in self.all_files
-            if keyword in os.path.basename(file_path).lower()
-        ]
+        if len(self.include_keywords) == 1:
+            keyword = next(iter(self.include_keywords))
+            filtered_files = [
+                file_path for file_path in self.all_files
+                if keyword in os.path.basename(file_path).lower()
+            ]
+            self.refresh_file_list(filtered_files)
+            return
+
+        if self.or_button.isChecked():
+            filtered_files = [
+                file_path for file_path in self.all_files
+                if any(
+                    keyword in os.path.basename(file_path).lower()
+                    for keyword in self.include_keywords
+                )
+            ]
+        elif self.and_button.isChecked():
+            filtered_files = [
+                file_path for file_path in self.all_files
+                if all(
+                    keyword in os.path.basename(file_path).lower()
+                    for keyword in self.include_keywords
+                )
+            ]
+        else:
+            filtered_files = self.all_files
+
+        if self.exclude_keywords:
+            filtered_files = [
+                file_path for file_path in filtered_files
+                if not any(
+                    keyword in os.path.basename(file_path).lower()
+                    for keyword in self.exclude_keywords
+                )
+            ]
+
+        
         self.refresh_file_list(filtered_files)
 
 
@@ -172,6 +219,8 @@ class FileCleanerApp(QWidget):
             self.and_button.setEnabled(False)
         else:
             self.and_button.setEnabled(True)
+
+        self.filter_files()
     
     def toggle_and(self):
         if self.and_button.isChecked():
@@ -179,10 +228,120 @@ class FileCleanerApp(QWidget):
         else:
             self.or_button.setEnabled(True)
 
+        self.filter_files()
+
     def add_keyword_include(self):
-        keyword = self.keyword_input.text()
+        keyword = self.keyword_input.text().strip().lower()
+
+        if not keyword:
+            return
+        
+        if len(self.include_keywords) >=1:
+            if not self.or_button.isChecked() and not self.and_button.isChecked():
+                QMessageBox.information(
+                    self,
+                    "Choose Search Mode",
+                    "Select either 'Include any keywords' or 'Include all keywords' before adding any more keywords"
+                )
+                return
+        
+
         self.include_keywords.add(keyword)
-        print(self.include_keywords)
+        self.create_keyword_chip(keyword)
+        self.keyword_input.clear()
+        self.filter_files()
+
+    def create_keyword_chip(self, keyword):
+        chip = QFrame()
+        chip_layout = QHBoxLayout(chip)
+        chip_layout.setContentsMargins(10,4,10,4)
+
+        label = QLabel(keyword)
+        remove_button = QPushButton("X")
+        remove_button.clicked.connect(lambda: self.remove_keyword(keyword, chip))
+
+        chip_layout.addWidget(label)
+        chip_layout.addWidget(remove_button)
+
+        chip.setStyleSheet("""
+            QFrame {
+                border: 1px solid #999999;
+                border-radius: 12px;
+                background-color: #e8f0fe;
+            }
+            QPushButton {
+                border: none;
+                background: transparent;
+                font-weight: bold;
+            }
+        """)
+
+        input_index = self.keyword_layout.indexOf(self.keyword_input)
+        self.keyword_layout.insertWidget(input_index, chip)
+    
+    def remove_keyword(self, keyword, chip):
+        if keyword in self.include_keywords:
+            self.include_keywords.remove(keyword)
+
+        self.keyword_layout.removeWidget(chip)
+        chip.deleteLater()
+        self.filter_files()
+
+    def exclude_init(self):
+        self.exclude_layout.removeWidget(self.exclude_button)
+
+        self.exclude_input = QLineEdit()
+        self.exclude_input.setPlaceholderText("Add keywords to exclude from file names")
+        self.exclude_input.returnPressed.connect(self.add_exclude_keyword)
+        self.exclude_layout.addWidget(self.exclude_input)
+    
+    def add_exclude_keyword(self):
+        keyword = self.exclude_input.text().strip().lower()
+
+        if not keyword:
+            return
+        
+
+        self.exclude_keywords.add(keyword)
+        self.create_exclude_chip(keyword)
+        self.exclude_input.clear()
+        self.filter_files()
+
+    def create_exclude_chip(self, keyword):
+        chip = QFrame()
+        chip_exclude_layout = QHBoxLayout(chip)
+        chip_exclude_layout.setContentsMargins(10,4,10,4)
+
+        label = QLabel(keyword)
+        remove_button = QPushButton("X")
+        remove_button.clicked.connect(lambda: self.remove_exclude_keyword(keyword, chip))
+
+        chip_exclude_layout.addWidget(label)
+        chip_exclude_layout.addWidget(remove_button)
+
+        chip.setStyleSheet("""
+            QFrame {
+                border: 1px solid #999999;
+                border-radius: 12px;
+                background-color: #e8f0fe;
+            }
+            QPushButton {
+                border: none;
+                background: transparent;
+                font-weight: bold;
+            }
+        """)
+
+        input_index = self.exclude_layout.indexOf(self.keyword_input)
+        self.exclude_layout.insertWidget(input_index, chip)
+
+    def remove_exclude_keyword(self, keyword, chip):
+        if keyword in self.exclude_keywords:
+            self.exclude_keywords.remove(keyword)
+
+        self.keyword_layout.removeWidget(chip)
+        chip.deleteLater()
+        self.filter_files()
 
 
 
