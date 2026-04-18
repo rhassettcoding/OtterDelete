@@ -2,7 +2,8 @@ import sys
 import os
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel,
-    QPushButton, QListWidget, QFileDialog, QMessageBox,QAbstractItemView
+    QPushButton, QListWidget, QFileDialog, QMessageBox, QAbstractItemView,
+    QLineEdit
 )
 
 
@@ -13,6 +14,7 @@ class FileCleanerApp(QWidget):
         self.setGeometry(100, 100, 600, 400)
 
         self.selected_folder = ""
+        self.all_files = []
 
         layout = QVBoxLayout()
 
@@ -22,6 +24,11 @@ class FileCleanerApp(QWidget):
         self.select_button = QPushButton("Select Folder")
         self.select_button.clicked.connect(self.select_folder)
         layout.addWidget(self.select_button)
+
+        self.keyword_input = QLineEdit()
+        self.keyword_input.setPlaceholderText("Search by keyword in file names")
+        self.keyword_input.textChanged.connect(self.filter_files)
+        layout.addWidget(self.keyword_input)
 
         # self.scan_button = QPushButton("Scan Files")
         # self.scan_button.clicked.connect(self.scan_files)
@@ -67,17 +74,11 @@ class FileCleanerApp(QWidget):
             QMessageBox.warning(self, "Warning", "Please select a folder first.")
             return
 
-        self.file_list.clear()
+        self.all_files.clear()
         self.dir_list.clear()
 
         self.scan_files_recursive(self.selected_folder)
-        # for file_name in os.listdir(self.selected_folder):
-        #     full_path = os.path.join(self.selected_folder, file_name)
-
-        #     if os.path.isfile(full_path):
-        #         self.file_list.addItem(full_path)
-            # else:
-            #     self.dir_list.addItem(full_path)
+        self.filter_files()
 
     def scan_files_recursive(self, folder):
         rec_dir = []
@@ -87,7 +88,7 @@ class FileCleanerApp(QWidget):
             full_path = os.path.join(folder, file_name)
 
             if os.path.isfile(full_path):
-                self.file_list.addItem(full_path)
+                self.all_files.append(full_path)
             elif(os.path.isdir(full_path)):
                 #add all the folders to rec_dir
                 rec_dir.append(full_path)
@@ -100,6 +101,24 @@ class FileCleanerApp(QWidget):
         #Then in a foreach loop call this on all the folders in rec_dir
         for recFolder in rec_dir:
             self.scan_files_recursive(recFolder)
+
+    def refresh_file_list(self, files_to_show):
+        self.file_list.clear()
+        for file_path in files_to_show:
+            self.file_list.addItem(file_path)
+
+    def filter_files(self):
+        keyword = self.keyword_input.text().strip().lower()
+
+        if not keyword:
+            self.refresh_file_list(self.all_files)
+            return
+
+        filtered_files = [
+            file_path for file_path in self.all_files
+            if keyword in os.path.basename(file_path).lower()
+        ]
+        self.refresh_file_list(filtered_files)
 
 
     def delete_files(self):
@@ -118,6 +137,9 @@ class FileCleanerApp(QWidget):
 
         if reply == QMessageBox.Yes:
             for item in selected_items:
+                file_path = item.text()
+                if file_path in self.all_files:
+                    self.all_files.remove(file_path)
                 # replace with os.remove(file_path) when actually ready to delete files
                 self.file_list.takeItem(self.file_list.row(item))
 
