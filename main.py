@@ -31,17 +31,26 @@ class FileCleanerApp(QWidget):
         self.file_list = QListWidget()
         self.file_list.setSelectionMode(QAbstractItemView.MultiSelection) #allows us to select multiple files
         layout.addWidget(self.file_list)
+        self.file_list_string = []
 
         # Set up for the directory list
         self.dir_list_label = QLabel("Directories")
-        layout.addWidget(self.dir_list_label)
+        # layout.addWidget(self.dir_list_label)
+
         self.dir_list = QListWidget()
         self.dir_list.setSelectionMode(QAbstractItemView.MultiSelection) #allows us to select multiple files
         # layout.addWidget(self.dir_list)
 
+        #This lets everything start out selected so as few clicks as possible to delete things
+        self.file_list.selectAll()
+
         self.select_all_button = QPushButton("Select All Files")
         self.select_all_button.clicked.connect(self.file_list.selectAll)
         layout.addWidget(self.select_all_button)
+
+        self.clear_button = QPushButton("Clear Selection")
+        self.clear_button.clicked.connect(self.file_list.clearSelection)
+        layout.addWidget(self.clear_button)
         
 
         self.delete_button = QPushButton("Delete Selected Files")
@@ -60,7 +69,7 @@ class FileCleanerApp(QWidget):
             self.label.setText(f"Selected Folder: {folder}")
             #scan the files directly after selecting a folder
             self.scan_files() 
-
+            
 
     def scan_files(self):
         if not self.selected_folder:
@@ -68,9 +77,11 @@ class FileCleanerApp(QWidget):
             return
 
         self.file_list.clear()
+        self.file_list_string.clear()
         self.dir_list.clear()
 
         self.scan_files_recursive(self.selected_folder)
+        self.file_list.selectAll()
         # for file_name in os.listdir(self.selected_folder):
         #     full_path = os.path.join(self.selected_folder, file_name)
 
@@ -88,6 +99,7 @@ class FileCleanerApp(QWidget):
 
             if os.path.isfile(full_path):
                 self.file_list.addItem(full_path)
+                self.file_list_string.append(full_path)
             elif(os.path.isdir(full_path)):
                 #add all the folders to rec_dir
                 rec_dir.append(full_path)
@@ -119,7 +131,12 @@ class FileCleanerApp(QWidget):
         if reply == QMessageBox.Yes:
             for item in selected_items:
                 # replace with os.remove(file_path) when actually ready to delete files
+                print("File To Be Deleted" + self.file_list_string[self.file_list.row(item)])
+                os.remove(self.file_list_string[self.file_list.row(item)])
+                
                 self.file_list.takeItem(self.file_list.row(item))
+                
+                
 
             QMessageBox.information(self, "Done", "Selected files removed from the list.")
 
