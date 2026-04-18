@@ -1,7 +1,7 @@
 import sys
 import os
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QLabel,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QListWidget, QFileDialog, QMessageBox, QAbstractItemView,
     QLineEdit
 )
@@ -25,9 +25,31 @@ class FileCleanerApp(QWidget):
         self.select_button.clicked.connect(self.select_folder)
         layout.addWidget(self.select_button)
 
+        button_row = QHBoxLayout()
+
+        self.or_button = QPushButton("Include any keywords")
+        self.or_button.setCheckable(True)
+        self.or_button.clicked.connect(self.toggle_or)
+
+        self.and_button = QPushButton("Include all keywords")
+        self.and_button.setCheckable(True)
+        self.and_button.clicked.connect(self.toggle_and)
+
+        self.include_keywords = set()
+        self.exclude_keywords = set()
+
+        self.keyword_container = QWidget()
+        self.keyword_layout = QHBox()
+
+        button_row.addWidget(self.or_button)
+        button_row.addWidget(self.and_button)
+
+        layout.addLayout(button_row)
+
         self.keyword_input = QLineEdit()
         self.keyword_input.setPlaceholderText("Search by keyword in file names")
         self.keyword_input.textChanged.connect(self.filter_files)
+        self.keyword_input.returnPressed.connect(self.add_keyword_include)
         layout.addWidget(self.keyword_input)
 
         # self.scan_button = QPushButton("Scan Files")
@@ -144,6 +166,25 @@ class FileCleanerApp(QWidget):
                 self.file_list.takeItem(self.file_list.row(item))
 
             QMessageBox.information(self, "Done", "Selected files removed from the list.")
+
+    def toggle_or(self):
+        if self.or_button.isChecked():
+            self.and_button.setEnabled(False)
+        else:
+            self.and_button.setEnabled(True)
+    
+    def toggle_and(self):
+        if self.and_button.isChecked():
+            self.or_button.setEnabled(False)
+        else:
+            self.or_button.setEnabled(True)
+
+    def add_keyword_include(self):
+        keyword = self.keyword_input.text()
+        self.include_keywords.add(keyword)
+        print(self.include_keywords)
+
+
 
 
 if __name__ == "__main__":
