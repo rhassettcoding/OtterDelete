@@ -4,9 +4,16 @@ import time
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QListWidget, QFileDialog, QMessageBox, QAbstractItemView,
-    QRadioButton, QButtonGroup, QLineEdit
+    QRadioButton, QButtonGroup, QLineEdit, QCheckBox
 )
 from PySide6.QtGui import QIntValidator
+
+SEARCH_PARAMS = {
+    "CHECK_DUPLICATES":True,
+    "CHECK_AGE":True,
+    "CHECK_SIZE":True,
+}
+
 
 class FileCleanerApp(QWidget):
     def __init__(self):
@@ -27,18 +34,40 @@ class FileCleanerApp(QWidget):
         self.select_button.clicked.connect(self.select_folder)
         layout.addWidget(self.select_button)
 
-        # Time period selector
+        # Search options checkboxes ----------------------->
+        self.search_options_label = QLabel("Search Options:")
+        layout.addWidget(self.search_options_label)
+
+        search_options_layout = QHBoxLayout()
+        self.check_duplicates_cb = QCheckBox("Check Duplicates")
+        self.check_duplicates_cb.setChecked(SEARCH_PARAMS["CHECK_DUPLICATES"])
+        self.check_duplicates_cb.toggled.connect(self.on_check_duplicates_toggled)
+        search_options_layout.addWidget(self.check_duplicates_cb)
+
+        self.check_age_cb = QCheckBox("Check Age")
+        self.check_age_cb.setChecked(SEARCH_PARAMS["CHECK_AGE"])
+        self.check_age_cb.toggled.connect(self.on_check_age_toggled)
+        search_options_layout.addWidget(self.check_age_cb)
+
+        self.check_size_cb = QCheckBox("Check Size")
+        self.check_size_cb.setChecked(SEARCH_PARAMS["CHECK_SIZE"])
+        self.check_size_cb.toggled.connect(self.on_check_size_toggled)
+        search_options_layout.addWidget(self.check_size_cb)
+
+        layout.addLayout(search_options_layout)
+
+        # Time period selector --------------->
         self.time_period_label = QLabel("Files modified past:")
         layout.addWidget(self.time_period_label)
 
-        time_selector_layout = QHBoxLayout()
+        self.time_selector_layout = QHBoxLayout()
         self.time_value_input = QLineEdit()
         self.time_value_input.setValidator(QIntValidator(0, 9999, self))
         self.time_value_input.setText("1")
         self.time_value_input.setMaximumWidth(80)
         self.time_value_input.editingFinished.connect(self.on_time_value_changed)
-        time_selector_layout.addWidget(QLabel("Amount:"))
-        time_selector_layout.addWidget(self.time_value_input)
+        self.time_selector_layout.addWidget(QLabel("Amount:"))
+        self.time_selector_layout.addWidget(self.time_value_input)
 
         self.day_radio = QRadioButton("Day")
         self.week_radio = QRadioButton("Week")
@@ -53,11 +82,12 @@ class FileCleanerApp(QWidget):
         self.time_unit_group.addButton(self.year_radio)
         self.time_unit_group.buttonClicked.connect(self.on_time_unit_changed)
 
-        time_selector_layout.addWidget(self.day_radio)
-        time_selector_layout.addWidget(self.week_radio)
-        time_selector_layout.addWidget(self.month_radio)
-        time_selector_layout.addWidget(self.year_radio)
-        layout.addLayout(time_selector_layout)
+        self.time_selector_layout.addWidget(self.day_radio)
+        self.time_selector_layout.addWidget(self.week_radio)
+        self.time_selector_layout.addWidget(self.month_radio)
+        self.time_selector_layout.addWidget(self.year_radio)
+        layout.addLayout(self.time_selector_layout)
+
 
         # self.scan_button = QPushButton("Scan Files")
         # self.scan_button.clicked.connect(self.scan_files)
@@ -106,6 +136,19 @@ class FileCleanerApp(QWidget):
         checked_button = self.time_unit_group.checkedButton()
         if checked_button:
             self.selected_time_unit = checked_button.text().lower()
+
+    def on_check_duplicates_toggled(self, checked):
+        SEARCH_PARAMS["CHECK_DUPLICATES"] = checked
+
+    def on_check_age_toggled(self, checked):
+        SEARCH_PARAMS["CHECK_AGE"] = checked
+        # Show/hide time period selector based on CHECK_AGE state
+        self.time_period_label.setVisible(checked)
+        for i in range(self.time_selector_layout.count()):
+            self.time_selector_layout.itemAt(i).widget().setVisible(checked)
+
+    def on_check_size_toggled(self, checked):
+        SEARCH_PARAMS["CHECK_SIZE"] = checked
 
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder To Scan")
@@ -157,7 +200,6 @@ class FileCleanerApp(QWidget):
             return True
         else:
             return False
-        
     
     def scan_files_recursive(self, folder):
         rec_dir = []
@@ -167,7 +209,7 @@ class FileCleanerApp(QWidget):
             full_path = os.path.join(folder, file_name)
 
             if os.path.isfile(full_path):
-                if(self.isDuplicate(full_path)):
+                if(self.isDuplicate(full_path)): #REPLACE WITH FILE OBJECT WHEN READY
                    self.file_list.addItem(full_path)
                    self.file_list_string.append(full_path)
                 
