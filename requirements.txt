@@ -1,0 +1,4 @@
+duplicates: no
+age: 9: months
+size: 2: mb
+search: hw: copy
