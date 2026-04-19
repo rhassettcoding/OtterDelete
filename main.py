@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import re
 from datetime import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -17,6 +18,7 @@ from PySide6.QtCore import Qt
 SEARCH_PARAMS = {
     "CHECK_AGE": False,
     "CHECK_SIZE": False,
+    "CHECK_DUPLICATES": True,
 }
 
 
@@ -174,6 +176,14 @@ class FileCleanerApp(QWidget):
                 font-size: 11px;
                 font-weight: 700;
             }
+            QLabel#pillDuplicate {
+                background-color: #DDD6FE;
+                color: #4C1D95;
+                border-radius: 9px;
+                padding: 2px 8px;
+                font-size: 11px;
+                font-weight: 700;
+            }
             QLabel#fileName {
                 color: #102A43;
                 font-weight: 600;
@@ -301,6 +311,12 @@ class FileCleanerApp(QWidget):
         self.check_size_cb.toggled.connect(self.on_check_size_toggled)
         
         search_options_layout.addWidget(self.check_size_cb)
+
+        self.check_duplicates_cb = QCheckBox("Check Duplicates")
+        self.check_duplicates_cb.setChecked(SEARCH_PARAMS["CHECK_DUPLICATES"])
+        self.check_duplicates_cb.toggled.connect(self.on_check_duplicates_toggled)
+        
+        search_options_layout.addWidget(self.check_duplicates_cb)
 
         sidebar_layout.addLayout(search_options_layout)
 
@@ -528,6 +544,11 @@ class FileCleanerApp(QWidget):
         if(self.file_list):
             self.refresh_heuristics()
 
+    def on_check_duplicates_toggled(self, checked):
+        SEARCH_PARAMS["CHECK_DUPLICATES"] = checked
+        if(self.file_list):
+            self.refresh_heuristics()
+
     def on_confidence_filter_changed(self):
         text = self.confidence_filter_dropdown.currentText()
 
@@ -570,6 +591,7 @@ class FileCleanerApp(QWidget):
             "flags": {
                 "is_old": False,
                 "is_big": False,
+                "is_duplicate": False,
             },
             "reasons": [],
             "score": 0,
@@ -595,10 +617,22 @@ class FileCleanerApp(QWidget):
     def isOld(self, file_obj):
         age_seconds = time.time() - file_obj["last_modified"]
         return age_seconds > self.get_age_threshold_seconds()
+    
+    def isDuplicate(self, file_obj):
+        filename_lower = file_obj["name"].lower()
+        # Check if "copy" is in the filename
+        if "copy" in filename_lower:
+            return True
+        # Check if filename contains (digit) pattern like (1), (2), etc.
+        # import re
+        if re.search(r'\(\d+\)', file_obj["name"]):
+            return True
+        return False
 
     def apply_heuristics(self, file_obj):
         file_obj["flags"]["is_old"] = self.isOld(file_obj)
         file_obj["flags"]["is_big"] = self.isBig(file_obj)
+        file_obj["flags"]["is_duplicate"] = self.isDuplicate(file_obj)
         file_obj["reasons"] = []
 
         if file_obj["flags"]["is_old"]:
@@ -606,6 +640,9 @@ class FileCleanerApp(QWidget):
 
         if file_obj["flags"]["is_big"]:
             file_obj["reasons"].append("File size exceeds selected threshold")
+        
+        if file_obj["flags"]["is_duplicate"]:
+            file_obj["reasons"].append("Filename contains 'copy' or ends with digit (likely duplicate)")
 
         self.apply_scoring(file_obj)
 
@@ -617,6 +654,9 @@ class FileCleanerApp(QWidget):
 
         if file_obj["flags"]["is_big"]:
             score += 40
+        
+        if file_obj["flags"]["is_duplicate"]:
+            score += 30
 
         score = max(0, min(score, 100))
         file_obj["score"] = score
@@ -685,6 +725,8 @@ class FileCleanerApp(QWidget):
             row_layout.addWidget(self.create_tag_label("OLD", "pillOld"))
         if file_obj["flags"]["is_big"]:
             row_layout.addWidget(self.create_tag_label("BIG", "pillBig"))
+        if file_obj["flags"]["is_duplicate"]:
+            row_layout.addWidget(self.create_tag_label("DUPLICATE", "pillDuplicate"))
 
         info_button = QPushButton("i")
         info_button.setObjectName("infoButton")
@@ -715,6 +757,8 @@ class FileCleanerApp(QWidget):
             active_flags.append("OLD")
         if file_obj["flags"]["is_big"]:
             active_flags.append("BIG")
+        if file_obj["flags"]["is_duplicate"]:
+            active_flags.append("DUPLICATE")
 
         form_layout.addRow("Name:", QLabel(file_obj["name"]))
         form_layout.addRow("Full Path:", QLabel(file_obj["path"]))
@@ -793,7 +837,8 @@ class FileCleanerApp(QWidget):
         if tags:
             return f'{file_obj["name"]} {" ".join(tags)}'
         return file_obj["name"]
-
+    
+    
 
     def is_file_old(self, full_path):
         # --> returns true if the file has aged past selected time stamp #
@@ -880,6 +925,9 @@ class FileCleanerApp(QWidget):
 
         if SEARCH_PARAMS["CHECK_SIZE"]:
             checks.append(file_obj["flags"]["is_big"])
+        
+        if SEARCH_PARAMS["CHECK_DUPLICATES"]:
+            checks.append(file_obj["flags"]["is_duplicate"])
 
         if not checks:
             return True
