@@ -4,17 +4,21 @@ import time
 from datetime import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QProgressDialog,
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox,
     QPushButton, QListWidget, QFileDialog, QMessageBox, QAbstractItemView,
+    QRadioButton, QButtonGroup, QLineEdit, QCheckBox, QProgressDialog, 
     QRadioButton, QButtonGroup, QCheckBox, QListWidgetItem, QFrame, QSplitter,
     QDialog, QDialogButtonBox, QFormLayout
 )
 from PySide6.QtGui import QIntValidator
+from PySide6.QtCore import Qt
 
 SEARCH_PARAMS = {
     "CHECK_AGE": False,
     "CHECK_SIZE": False,
 }
+
 
 file_size = {"kb": 1024, "mb": 1024 * 1024, "gb": 1024 * 1024 * 1024}
 file_size_a = ["kb", "mb", "gb"]
@@ -421,9 +425,6 @@ class FileCleanerApp(QWidget):
         self.dir_list.setSelectionMode(QAbstractItemView.MultiSelection) #allows us to select multiple files
         # layout.addWidget(self.dir_list)
 
-        #This lets everything start out selected so as few clicks as possible to delete things
-        self.file_list.selectAll()
-
         self.select_all_button = QPushButton("Select All Files")
         self.select_all_button.clicked.connect(self.file_list.selectAll)
 
@@ -439,6 +440,25 @@ class FileCleanerApp(QWidget):
 
         self.delete_button = QPushButton("Delete Selected Files")
         self.delete_button.clicked.connect(self.delete_files)
+        layout.addWidget(self.delete_button)
+
+        self.setLayout(layout)
+        self.loading_dialog = None
+
+    def show_loading(self, title, message):
+        self.loading_dialog = QProgressDialog(message, "Cancel", 0, 0, self)
+        self.loading_dialog.setWindowTitle(title)
+        self.loading_dialog.setWindowModality(Qt.WindowModal)
+        self.loading_dialog.setMinimumDuration(0)
+        self.loading_dialog.setValue(0)
+        self.loading_dialog.show()
+        QApplication.processEvents()
+
+    def hide_loading(self):
+        if self.loading_dialog:
+            self.loading_dialog.close()
+            self.loading_dialog = None
+            QApplication.processEvents()
         self.delete_button.setObjectName("dangerButton")
         self.delete_button.setEnabled(False)
         action_row.addWidget(self.delete_button)
@@ -776,6 +796,42 @@ class FileCleanerApp(QWidget):
         return file_obj["name"]
 
 
+    def is_file_old(self, full_path):
+        # --> returns true if the file has aged past selected time stamp #
+        file_last_modified = os.path.getmtime(full_path)
+        
+        # Check if file was modified past the selected time threshold
+        current_time = time.time()
+        unit_seconds = {
+            "day": 24 * 60 * 60,
+            "week": 7 * 24 * 60 * 60,
+            "month": 30 * 24 * 60 * 60,
+            "year": 365 * 24 * 60 * 60,
+        }.get(self.selected_time_unit, 0)
+        cutoff_time = current_time - (self.selected_time_value * unit_seconds)
+        if file_last_modified < cutoff_time:
+            return True
+        else:
+            return False
+    
+    def scan_files(self):
+        if not self.selected_folder:
+            QMessageBox.warning(self, "Warning", "Please select a folder first.")
+            return
+
+        self.file_list.clear()
+        self.file_list_string.clear()
+        self.dir_list.clear()
+
+        self.show_loading("Scanning", "Scanning files. Please wait...")
+        self.file_list.setUpdatesEnabled(False)
+        try:
+            self.scan_files_recursive(self.selected_folder)
+        finally:
+            self.file_list.setUpdatesEnabled(True)
+            self.hide_loading()
+    
+
     def scan_files(self):
         if not self.selected_folder:
             QMessageBox.warning(self, "Warning", "Please select a folder first.")
@@ -789,12 +845,34 @@ class FileCleanerApp(QWidget):
         self.filter_files()
 
     def scan_files_recursive(self, folder):
+        for root, dirs, files in os.walk(folder):
+            if self.loading_dialog and self.loading_dialog.wasCanceled():
+                return
+
+            QApplication.processEvents()
+
+            for file_name in files:
+                full_path = os.path.join(root, file_name)
         rec_dir = []
 
         # Go through the folder and add all the files to the file list.
         for file_name in os.listdir(folder):
             full_path = os.path.join(folder, file_name)
 
+                big = True
+                dupe = True
+                old = True
+
+                if SEARCH_PARAMS["CHECK_SIZE"]:
+                    big = self.isBig(full_path)
+                if SEARCH_PARAMS["CHECK_DUPLICATES"]:
+                    dupe = self.isDuplicate(full_path)
+                if SEARCH_PARAMS["CHECK_AGE"]:
+                    old = self.is_file_old(full_path)
+
+                if big and dupe and old:
+                    self.file_list.addItem(full_path)
+                    self.file_list_string.append(full_path)
             if os.path.isfile(full_path):
                 self.all_files.append(self.build_file_object(full_path))
             elif(os.path.isdir(full_path)):
@@ -905,7 +983,26 @@ class FileCleanerApp(QWidget):
         )
 
         if reply == QMessageBox.Yes:
+            failed_deletes = []
             for item in selected_items:
+                file_path = item.text()
+                try:
+                    os.remove(file_path)
+                    self.file_list_string = [p for p in self.file_list_string if p != file_path]
+                    self.file_list.takeItem(self.file_list.row(item))
+                except OSError as error:
+                    failed_deletes.append(f"{file_path}: {error}")
+
+            if failed_deletes:
+                QMessageBox.warning(
+                    self,
+                    "Partial Delete",
+                    "Some files could not be deleted:\n\n" + "\n".join(failed_deletes),
+                )
+            else:
+                QMessageBox.information(self, "Done", "Selected files removed from the list.")
+
+
                 file_path = item.data(Qt.UserRole)
                 self.all_files = [
                     file_obj for file_obj in self.all_files
@@ -1061,3 +1158,4 @@ if __name__ == "__main__":
     window = FileCleanerApp()
     window.show()
     sys.exit(app.exec())
+
