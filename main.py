@@ -2,7 +2,7 @@ import sys
 import os
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel,
-    QPushButton, QListWidget, QFileDialog, QMessageBox,QAbstractItemView
+    QPushButton, QListWidget, QFileDialog, QMessageBox,QAbstractItemView, QCheckBox
 )
 
 
@@ -23,9 +23,14 @@ class FileCleanerApp(QWidget):
         self.select_button.clicked.connect(self.select_folder)
         layout.addWidget(self.select_button)
 
-        # self.scan_button = QPushButton("Scan Files")
-        # self.scan_button.clicked.connect(self.scan_files)
-        # layout.addWidget(self.scan_button)
+        self.scan_button = QPushButton("Scan Files")
+        self.scan_button.clicked.connect(self.scan_files)
+        layout.addWidget(self.scan_button)
+
+        #Here we check for duplicates
+        self.is_duplicate_checkbox = QCheckBox("Is Duplicate")
+        layout.addWidget(self.is_duplicate_checkbox)
+
         self.file_list_label = QLabel("Files")
         layout.addWidget(self.file_list_label)
         self.file_list = QListWidget()
@@ -69,7 +74,15 @@ class FileCleanerApp(QWidget):
             self.label.setText(f"Selected Folder: {folder}")
             #scan the files directly after selecting a folder
             self.scan_files() 
-            
+
+    def isDuplicate(self, file):
+        if(self.is_duplicate_checkbox):
+            #Check the file_list does anything have the same suffix, minus the numbers?
+            #if there is return false
+            for check in self.file_list_string:
+                if(check == file):
+                    return False
+        return True
 
     def scan_files(self):
         if not self.selected_folder:
@@ -98,8 +111,10 @@ class FileCleanerApp(QWidget):
             full_path = os.path.join(folder, file_name)
 
             if os.path.isfile(full_path):
-                self.file_list.addItem(full_path)
-                self.file_list_string.append(full_path)
+                if(self.isDuplicate(full_path)):
+                   self.file_list.addItem(full_path)
+                   self.file_list_string.append(full_path)
+                
             elif(os.path.isdir(full_path)):
                 #add all the folders to rec_dir
                 rec_dir.append(full_path)
@@ -112,7 +127,6 @@ class FileCleanerApp(QWidget):
         #Then in a foreach loop call this on all the folders in rec_dir
         for recFolder in rec_dir:
             self.scan_files_recursive(recFolder)
-
 
     def delete_files(self):
         selected_items = self.file_list.selectedItems()
