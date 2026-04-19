@@ -3,11 +3,24 @@ import os
 import time
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QHBoxLayout, QLineEdit, QComboBox,
     QPushButton, QListWidget, QFileDialog, QMessageBox, QAbstractItemView,
-    QLineEdit, QFrame, QListWidgetItem
+    QRadioButton, QButtonGroup, QLineEdit, QCheckBox, 
 )
+from PySide6.QtGui import QIntValidator
 
+SEARCH_PARAMS = {
+    "CHECK_DUPLICATES":True,
+    "CHECK_AGE":True,
+    "CHECK_SIZE":True,
+}
+
+
+from PySide6.QtGui import QIntValidator
+
+file_size = {"kb":1024, "mb":1024000, "gb":1024000000}
+file_size_a = ["kb", "mb", "gb"]
+max_size = -1
 
 class FileCleanerApp(QWidget):
     OLD_FILE_DAYS = 180
@@ -16,14 +29,13 @@ class FileCleanerApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("OtterDelete")
-        self.setGeometry(100, 100, 600, 400)
+        self.setGeometry(100, 100, 600, 700)
 
         self.selected_folder = ""
-        self.all_files = []
 
         layout = QVBoxLayout()
 
-        self.label = QLabel("Choose a folder to scan for old school files.")
+        self.label = QLabel("Choose a starting folder.")
         layout.addWidget(self.label)
 
         self.select_button = QPushButton("Select Folder")
@@ -71,25 +83,115 @@ class FileCleanerApp(QWidget):
         layout.addWidget(self.exclude_container)
 
 
-        # self.scan_button = QPushButton("Scan Files")
-        # self.scan_button.clicked.connect(self.scan_files)
-        # layout.addWidget(self.scan_button)
+        self.scan_button = QPushButton("Scan Files")
+        self.scan_button.clicked.connect(self.scan_files)
+        layout.addWidget(self.scan_button)
+
+        self.search_options_label = QLabel("Search Options:")
+        layout.addWidget(self.search_options_label)
+
+        search_options_layout = QHBoxLayout()
+        self.check_duplicates_cb = QCheckBox("Check Duplicates")
+        self.check_duplicates_cb.setChecked(SEARCH_PARAMS["CHECK_DUPLICATES"])
+        self.check_duplicates_cb.toggled.connect(self.on_check_duplicates_toggled)
+        search_options_layout.addWidget(self.check_duplicates_cb)
+
+        self.check_age_cb = QCheckBox("Check Age")
+        self.check_age_cb.setChecked(SEARCH_PARAMS["CHECK_AGE"])
+        self.check_age_cb.toggled.connect(self.on_check_age_toggled)
+        search_options_layout.addWidget(self.check_age_cb)
+
+        self.check_size_cb = QCheckBox("Check Size")
+        self.check_size_cb.setChecked(SEARCH_PARAMS["CHECK_SIZE"])
+        self.check_size_cb.toggled.connect(self.on_check_size_toggled)
+        search_options_layout.addWidget(self.check_size_cb)
+
+        layout.addLayout(search_options_layout)
+
+        self.sizeSelectorLayout = QHBoxLayout()
+
+        self.is_big_label = QLabel("Size: ")
+
+        #Add a textbox
+        self.size_text = QLineEdit()
+        self.size_text.setValidator(QIntValidator(0, 9999, self))
+
+        #Add a drop down
+        self.size_scale = QComboBox()
+        for k in file_size.keys():
+            self.size_scale.addItem(k)
+
+        #Add a button to confirm
+        self.size_confirm_button = QPushButton("Confirm")
+        self.size_confirm_button.clicked.connect(self.changeMaxSize)
+
+        #Add all the widgets in order
+        self.sizeSelectorLayout.addWidget(self.is_big_label)
+        self.sizeSelectorLayout.addWidget(self.size_text)
+        self.sizeSelectorLayout.addWidget(self.size_scale)
+        self.sizeSelectorLayout.addWidget(self.size_confirm_button)
+
+        layout.addLayout(self.sizeSelectorLayout)
+
+        # Time period selector --------------->
+        self.time_period_label = QLabel("Files modified past:")
+        layout.addWidget(self.time_period_label)
+
+        self.time_selector_layout = QHBoxLayout()
+        self.time_value_input = QLineEdit()
+        self.time_value_input.setValidator(QIntValidator(0, 9999, self))
+        self.time_value_input.setText("1")
+        self.time_value_input.setMaximumWidth(80)
+        self.time_value_input.editingFinished.connect(self.on_time_value_changed)
+        self.time_selector_layout.addWidget(QLabel("Amount:"))
+        self.time_selector_layout.addWidget(self.time_value_input)
+
+        self.day_radio = QRadioButton("Day")
+        self.week_radio = QRadioButton("Week")
+        self.month_radio = QRadioButton("Month")
+        self.year_radio = QRadioButton("Year")
+        self.month_radio.setChecked(True)
+
+        self.time_unit_group = QButtonGroup(self)
+        self.time_unit_group.addButton(self.day_radio)
+        self.time_unit_group.addButton(self.week_radio)
+        self.time_unit_group.addButton(self.month_radio)
+        self.time_unit_group.addButton(self.year_radio)
+        self.time_unit_group.buttonClicked.connect(self.on_time_unit_changed)
+
+        self.time_selector_layout.addWidget(self.day_radio)
+        self.time_selector_layout.addWidget(self.week_radio)
+        self.time_selector_layout.addWidget(self.month_radio)
+        self.time_selector_layout.addWidget(self.year_radio)
+        layout.addLayout(self.time_selector_layout)
+        
+        
+
         self.file_list_label = QLabel("Files")
         layout.addWidget(self.file_list_label)
         self.file_list = QListWidget()
         self.file_list.setSelectionMode(QAbstractItemView.MultiSelection) #allows us to select multiple files
         layout.addWidget(self.file_list)
+        self.file_list_string = []
 
         # Set up for the directory list
         self.dir_list_label = QLabel("Directories")
-        layout.addWidget(self.dir_list_label)
+        # layout.addWidget(self.dir_list_label)
+
         self.dir_list = QListWidget()
         self.dir_list.setSelectionMode(QAbstractItemView.MultiSelection) #allows us to select multiple files
         # layout.addWidget(self.dir_list)
 
+        #This lets everything start out selected so as few clicks as possible to delete things
+        self.file_list.selectAll()
+
         self.select_all_button = QPushButton("Select All Files")
         self.select_all_button.clicked.connect(self.file_list.selectAll)
         layout.addWidget(self.select_all_button)
+
+        self.clear_button = QPushButton("Clear Selection")
+        self.clear_button.clicked.connect(self.file_list.clearSelection)
+        layout.addWidget(self.clear_button)
         
 
         self.delete_button = QPushButton("Delete Selected Files")
@@ -97,6 +199,55 @@ class FileCleanerApp(QWidget):
         layout.addWidget(self.delete_button)
 
         self.setLayout(layout)
+
+    def changeMaxSize(self):
+        newSize = self.size_text.text()
+        newScale = self.size_scale.currentIndex()
+        format = file_size_a[newScale]
+        
+        mult = file_size[format]
+        # print("In Max Size")
+        # print(format)
+        # print(file_size[format])
+
+        sizeText = newSize.strip()
+        if(sizeText):
+            sizeText = int(sizeText)
+        else:
+            sizeText = 0
+        global max_size
+        max_size = sizeText*mult
+        # print(max_size)
+        return
+
+    def on_time_value_changed(self):
+        value_text = self.time_value_input.text().strip()
+        if value_text:
+            self.selected_time_value = int(value_text)
+        else:
+            self.selected_time_value = 0
+
+    def on_time_unit_changed(self):
+        checked_button = self.time_unit_group.checkedButton()
+        if checked_button:
+            self.selected_time_unit = checked_button.text().lower()
+
+    def on_check_duplicates_toggled(self, checked):
+        SEARCH_PARAMS["CHECK_DUPLICATES"] = checked
+
+    def on_check_age_toggled(self, checked):
+        SEARCH_PARAMS["CHECK_AGE"] = checked
+        # Show/hide time period selector based on CHECK_AGE state
+        self.time_period_label.setVisible(checked)
+        for i in range(self.time_selector_layout.count()):
+            self.time_selector_layout.itemAt(i).widget().setVisible(checked)
+
+    def on_check_size_toggled(self, checked):
+        SEARCH_PARAMS["CHECK_SIZE"] = checked
+        self.is_big_label.setVisible(checked)
+        for i in range(self.sizeSelectorLayout.count()):
+            self.sizeSelectorLayout.itemAt(i).widget().setVisible(checked)
+        
 
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder To Scan")
@@ -109,17 +260,42 @@ class FileCleanerApp(QWidget):
             #scan the files directly after selecting a folder
             self.scan_files() 
 
+    #Deprecated to be replaced with getDuplicates
+    def isDuplicate(self, file):
+        # if(self.is_duplicate_checkbox):
+        #     #Check the file_list does anything have the same suffix, minus the numbers?
+        #     #if there is return false
+        #     for check in self.file_list_string:
+        #         if(check == file):
+        #             return False
+        return True
+    
+    def isBig(self, file):
+        # print(file)
+        # print("Size: " + str(os.path.getsize(file)))
+        # print("Max Size: " + str(max_size))
+        if(os.path.getsize(file) > max_size):
+            return True
+        else:
+            return False
+
 
     def scan_files(self):
         if not self.selected_folder:
             QMessageBox.warning(self, "Warning", "Please select a folder first.")
             return
 
-        self.all_files.clear()
+        self.file_list.clear()
         self.dir_list.clear()
 
         self.scan_files_recursive(self.selected_folder)
-        self.filter_files()
+        # for file_name in os.listdir(self.selected_folder):
+        #     full_path = os.path.join(self.selected_folder, file_name)
+
+        #     if os.path.isfile(full_path):
+        #         self.file_list.addItem(full_path)
+            # else:
+            #     self.dir_list.addItem(full_path)
 
     def scan_files_recursive(self, folder):
         rec_dir = []
@@ -129,11 +305,10 @@ class FileCleanerApp(QWidget):
             full_path = os.path.join(folder, file_name)
 
             if os.path.isfile(full_path):
-                self.all_files.append(self.build_file_object(full_path))
+                self.file_list.addItem(full_path)
             elif(os.path.isdir(full_path)):
                 # Add all the folders to rec_dir.
                 rec_dir.append(full_path)
-        
         
         #If rec_dir empty return
         if(len(rec_dir) == 0):
@@ -142,112 +317,6 @@ class FileCleanerApp(QWidget):
         #Then in a foreach loop call this on all the folders in rec_dir
         for recFolder in rec_dir:
             self.scan_files_recursive(recFolder)
-
-    def build_file_object(self, path):
-        stats = os.stat(path)
-        file_obj = {
-            "name": os.path.basename(path),
-            "path": path,
-            "size": stats.st_size,
-            "last_modified": stats.st_mtime,
-            "last_accessed": stats.st_atime,
-            "extension": os.path.splitext(path)[1].lower(),
-            "flags": {
-                "is_old": False,
-                "is_forgotten": False,
-                "is_big": False
-            },
-            "reasons": []
-        }
-        self.apply_heuristics(file_obj)
-        return file_obj
-
-    def apply_heuristics(self, file_obj):
-        current_time = time.time()
-        old_file_seconds = self.OLD_FILE_DAYS * 24 * 60 * 60
-
-        if current_time - file_obj["last_modified"] > old_file_seconds:
-            file_obj["flags"]["is_old"] = True
-            file_obj["reasons"].append(
-                f"Last modified over {self.OLD_FILE_DAYS} days ago"
-            )
-
-        if current_time - file_obj["last_accessed"] > old_file_seconds:
-            file_obj["flags"]["is_forgotten"] = True
-            file_obj["reasons"].append(
-                f"Last accessed over {self.OLD_FILE_DAYS} days ago"
-            )
-
-        if file_obj["size"] > self.BIG_FILE_BYTES:
-            file_obj["flags"]["is_big"] = True
-            file_obj["reasons"].append("File larger than 50 MB")
-
-    def is_flagged(self, file_obj):
-        return any(file_obj["flags"].values())
-
-    def format_file_display(self, file_obj):
-        tags = []
-
-        if file_obj["flags"]["is_old"]:
-            tags.append("[OLD]")
-        if file_obj["flags"]["is_forgotten"]:
-            tags.append("[FORGOTTEN]")
-        if file_obj["flags"]["is_big"]:
-            tags.append("[BIG]")
-
-        if tags:
-            return f'{file_obj["name"]} {" ".join(tags)}'
-        return file_obj["name"]
-
-    def refresh_file_list(self, files_to_show):
-        self.file_list.clear()
-        for file_obj in files_to_show:
-            item = QListWidgetItem(self.format_file_display(file_obj))
-            item.setData(Qt.UserRole, file_obj["path"])
-            item.setToolTip("\n".join(file_obj["reasons"]) or file_obj["path"])
-            self.file_list.addItem(item)
-
-    def filter_files(self):
-        filtered_files = [
-            file_obj for file_obj in self.all_files
-            if self.is_flagged(file_obj)
-        ]
-
-        if len(self.include_keywords) == 1:
-            keyword = next(iter(self.include_keywords))
-            filtered_files = [
-                file_obj for file_obj in filtered_files
-                if keyword in file_obj["name"].lower()
-            ]
-        elif len(self.include_keywords) > 1:
-            if self.or_button.isChecked():
-                filtered_files = [
-                    file_obj for file_obj in filtered_files
-                    if any(
-                        keyword in file_obj["name"].lower()
-                        for keyword in self.include_keywords
-                    )
-                ]
-            elif self.and_button.isChecked():
-                filtered_files = [
-                    file_obj for file_obj in filtered_files
-                    if all(
-                        keyword in file_obj["name"].lower()
-                        for keyword in self.include_keywords
-                    )
-                ]
-
-        if self.exclude_keywords:
-            filtered_files = [
-                file_obj for file_obj in filtered_files
-                if not any(
-                    keyword in file_obj["name"].lower()
-                    for keyword in self.exclude_keywords
-                )
-            ]
-
-        
-        self.refresh_file_list(filtered_files)
 
 
     def delete_files(self):
@@ -266,12 +335,10 @@ class FileCleanerApp(QWidget):
 
         if reply == QMessageBox.Yes:
             for item in selected_items:
-                file_path = item.data(Qt.UserRole)
-                self.all_files = [
-                    file_obj for file_obj in self.all_files
-                    if file_obj["path"] != file_path
-                ]
+                # replace with os.remove(file_path) when actually ready to delete files
                 self.file_list.takeItem(self.file_list.row(item))
+                
+                
 
             QMessageBox.information(self, "Done", "Selected files removed from the list.")
 
