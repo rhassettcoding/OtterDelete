@@ -27,6 +27,10 @@ class FileCleanerApp(QWidget):
         self.scan_button.clicked.connect(self.scan_files)
         layout.addWidget(self.scan_button)
 
+        self.is_big_label = QLabel("Size: ")
+
+        layout.addWidget(self.is_big_label)
+
         #Here we check for duplicates
         self.is_duplicate_checkbox = QCheckBox("Is Duplicate")
         layout.addWidget(self.is_duplicate_checkbox)
@@ -83,6 +87,10 @@ class FileCleanerApp(QWidget):
                 if(check == file):
                     return False
         return True
+    
+    def isBig(self, file):
+        return True
+
 
     def scan_files(self):
         if not self.selected_folder:
