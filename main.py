@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QIntValidator
 
 SEARCH_PARAMS = {
-    "CHECK_AGE": True,
-    "CHECK_SIZE": True,
+    "CHECK_AGE": False,
+    "CHECK_SIZE": False,
 }
 
 file_size = {"kb": 1024, "mb": 1024 * 1024, "gb": 1024 * 1024 * 1024}
@@ -23,20 +23,20 @@ class FileCleanerApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("OtterDelete")
-        self.setGeometry(100, 100, 1100, 820)
+        self.setGeometry(100, 100, 1100, 725)
         self.setMinimumSize(900, 720)
 
         self.selected_folder = ""
         self.all_files = []
         self.selected_time_value = 1
         self.selected_time_unit = "month"
-        self.max_size = -1
+        self.max_size = 0
         self.current_displayed_files = []
         self.confidence_filter = "ALL"
 
         root_layout = QVBoxLayout()
-        root_layout.setContentsMargins(18, 18, 18, 18)
-        root_layout.setSpacing(14)
+        root_layout.setContentsMargins(5, 5, 5, 5)
+        root_layout.setSpacing(10)
 
         self.setStyleSheet("""
             QWidget {
@@ -102,8 +102,8 @@ class FileCleanerApp(QWidget):
                 background-color: #E7EEF7;
                 border: 1px solid #C9D6E2;
                 border-radius: 10px;
-                padding: 10px 14px;
-                font-weight: 600;
+                padding: 5px 5px;
+                font-weight: 500;
             }
             QPushButton:hover {
                 background-color: #D9E7F5;
@@ -289,11 +289,13 @@ class FileCleanerApp(QWidget):
         self.check_age_cb = QCheckBox("Check Age")
         self.check_age_cb.setChecked(SEARCH_PARAMS["CHECK_AGE"])
         self.check_age_cb.toggled.connect(self.on_check_age_toggled)
+        
         search_options_layout.addWidget(self.check_age_cb)
 
         self.check_size_cb = QCheckBox("Check Size")
         self.check_size_cb.setChecked(SEARCH_PARAMS["CHECK_SIZE"])
         self.check_size_cb.toggled.connect(self.on_check_size_toggled)
+        
         search_options_layout.addWidget(self.check_size_cb)
 
         sidebar_layout.addLayout(search_options_layout)
@@ -354,6 +356,8 @@ class FileCleanerApp(QWidget):
         self.time_selector_layout.addWidget(self.month_radio)
         self.time_selector_layout.addWidget(self.year_radio)
         sidebar_layout.addLayout(self.time_selector_layout)
+
+        
 
         self.add_sidebar_header(sidebar_layout, "SCORE FILTERS")
 
@@ -447,6 +451,9 @@ class FileCleanerApp(QWidget):
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
 
+        self.on_check_age_toggled(SEARCH_PARAMS["CHECK_AGE"])
+        self.on_check_size_toggled(SEARCH_PARAMS["CHECK_SIZE"])
+
         self.setLayout(root_layout)
         self.update_selection_summary()
 
@@ -489,14 +496,18 @@ class FileCleanerApp(QWidget):
         self.time_period_label.setVisible(checked)
         for i in range(self.time_selector_layout.count()):
             self.time_selector_layout.itemAt(i).widget().setVisible(checked)
-        self.refresh_heuristics()
+        if(not checked):
+            self.max_size = 0
+        if(self.file_list):
+            self.refresh_heuristics()
 
     def on_check_size_toggled(self, checked):
         SEARCH_PARAMS["CHECK_SIZE"] = checked
         self.is_big_label.setVisible(checked)
         for i in range(self.sizeSelectorLayout.count()):
             self.sizeSelectorLayout.itemAt(i).widget().setVisible(checked)
-        self.refresh_heuristics()
+        if(self.file_list):
+            self.refresh_heuristics()
 
     def on_confidence_filter_changed(self):
         text = self.confidence_filter_dropdown.currentText()
@@ -512,7 +523,6 @@ class FileCleanerApp(QWidget):
 
         self.filter_files()
         
-
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder To Scan")
         if folder:
@@ -875,7 +885,7 @@ class FileCleanerApp(QWidget):
                     if file_obj["score"] > 80
                 ]
 
-        filtered_files.sort(key=lambda file_obj: file_obj["score"], reverse=True)
+        # filtered_files.sort(key=lambda file_obj: file_obj["score"], reverse=True)
 
         self.refresh_file_list(filtered_files)
 
@@ -903,7 +913,7 @@ class FileCleanerApp(QWidget):
                 ]
             self.filter_files()
 
-            QMessageBox.information(self, "Done", "Selected files removed from the list.")
+            QMessageBox.information(self, "Done", "Selected Files Deleted")
 
     def toggle_or(self):
         if self.or_button.isChecked():
