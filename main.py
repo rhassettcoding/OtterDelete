@@ -2,9 +2,9 @@ import sys
 import os
 import time
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QHBoxLayout, QLineEdit, QComboBox,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox,
     QPushButton, QListWidget, QFileDialog, QMessageBox, QAbstractItemView,
-    QRadioButton, QButtonGroup, QLineEdit, QCheckBox, 
+    QRadioButton, QButtonGroup, QCheckBox,
 )
 from PySide6.QtGui import QIntValidator
 
@@ -14,8 +14,6 @@ SEARCH_PARAMS = {
     "CHECK_SIZE":True,
 }
 
-
-from PySide6.QtGui import QIntValidator
 
 file_size = {"kb":1024, "mb":1024000, "gb":1024000000}
 file_size_a = ["kb", "mb", "gb"]
@@ -139,9 +137,6 @@ class FileCleanerApp(QWidget):
         self.dir_list.setSelectionMode(QAbstractItemView.MultiSelection) #allows us to select multiple files
         # layout.addWidget(self.dir_list)
 
-        #This lets everything start out selected so as few clicks as possible to delete things
-        self.file_list.selectAll()
-
         self.select_all_button = QPushButton("Select All Files")
         self.select_all_button.clicked.connect(self.file_list.selectAll)
         layout.addWidget(self.select_all_button)
@@ -252,7 +247,6 @@ class FileCleanerApp(QWidget):
     def is_file_old(self, full_path):
         # --> returns true if the file has aged past selected time stamp #
         file_last_modified = os.path.getmtime(full_path)
-        file_created = os.path.getctime(full_path)
         
         # Check if file was modified past the selected time threshold
         current_time = time.time()
@@ -272,7 +266,12 @@ class FileCleanerApp(QWidget):
         rec_dir = []
 
         #Go through the folder and add all the files to the file list
-        for file_name in os.listdir(folder):
+        try:
+            entries = os.listdir(folder)
+        except OSError:
+            return
+
+        for file_name in entries:
             full_path = os.path.join(folder, file_name)
 
             if os.path.isfile(full_path):
@@ -319,16 +318,24 @@ class FileCleanerApp(QWidget):
         )
 
         if reply == QMessageBox.Yes:
+            failed_deletes = []
             for item in selected_items:
-                # replace with os.remove(file_path) when actually ready to delete files
-                # print("File To Be Deleted" + self.file_list_string[self.file_list.row(item)])
-                os.remove(self.file_list_string[self.file_list.row(item)])
-                
-                self.file_list.takeItem(self.file_list.row(item))
-                
-                
+                file_path = item.text()
+                try:
+                    os.remove(file_path)
+                    self.file_list_string = [p for p in self.file_list_string if p != file_path]
+                    self.file_list.takeItem(self.file_list.row(item))
+                except OSError as error:
+                    failed_deletes.append(f"{file_path}: {error}")
 
-            QMessageBox.information(self, "Done", "Selected files removed from the list.")
+            if failed_deletes:
+                QMessageBox.warning(
+                    self,
+                    "Partial Delete",
+                    "Some files could not be deleted:\n\n" + "\n".join(failed_deletes),
+                )
+            else:
+                QMessageBox.information(self, "Done", "Selected files removed from the list.")
 
 
 if __name__ == "__main__":
