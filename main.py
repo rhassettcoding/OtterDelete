@@ -1,11 +1,13 @@
 import sys
 import os
 import time
+from datetime import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox,
     QPushButton, QListWidget, QFileDialog, QMessageBox, QAbstractItemView,
-    QRadioButton, QButtonGroup, QCheckBox, QListWidgetItem, QFrame, QSplitter
+    QRadioButton, QButtonGroup, QCheckBox, QListWidgetItem, QFrame, QSplitter,
+    QDialog, QDialogButtonBox, QFormLayout
 )
 from PySide6.QtGui import QIntValidator
 
@@ -181,6 +183,15 @@ class FileCleanerApp(QWidget):
                 font-size: 12px;
                 font-weight: 700;
                 min-width: 120px;
+            }
+            QPushButton#infoButton {
+                min-width: 28px;
+                max-width: 28px;
+                min-height: 28px;
+                max-height: 28px;
+                border-radius: 14px;
+                padding: 0px;
+                font-weight: 700;
             }
             QSplitter::handle {
                 background-color: #D8E1EB;
@@ -616,6 +627,9 @@ class FileCleanerApp(QWidget):
         tag_label.setObjectName(object_name)
         return tag_label
 
+    def format_timestamp(self, timestamp):
+        return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M")
+
     def create_result_row(self, file_obj):
         row_widget = QWidget()
         row_layout = QHBoxLayout()
@@ -643,7 +657,67 @@ class FileCleanerApp(QWidget):
         if file_obj["flags"]["is_big"]:
             row_layout.addWidget(self.create_tag_label("BIG", "pillBig"))
 
+        info_button = QPushButton("i")
+        info_button.setObjectName("infoButton")
+        info_button.clicked.connect(
+            lambda _, current_file=file_obj: self.show_file_details(current_file)
+        )
+        row_layout.addWidget(info_button)
+
         return row_widget
+
+    def show_file_details(self, file_obj):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("OtterDelete - File Details")
+        dialog.setModal(True)
+        dialog.resize(560, 420)
+
+        layout = QVBoxLayout()
+
+        title_label = QLabel("File Details")
+        title_label.setObjectName("sectionTitle")
+        layout.addWidget(title_label)
+
+        form_layout = QFormLayout()
+        form_layout.setSpacing(10)
+
+        active_flags = []
+        if file_obj["flags"]["is_old"]:
+            active_flags.append("OLD")
+        if file_obj["flags"]["is_big"]:
+            active_flags.append("BIG")
+
+        form_layout.addRow("Name:", QLabel(file_obj["name"]))
+        form_layout.addRow("Full Path:", QLabel(file_obj["path"]))
+        form_layout.addRow("Size:", QLabel(self.format_size(file_obj["size"])))
+        form_layout.addRow("Extension:", QLabel(file_obj["extension"] or "None"))
+        form_layout.addRow("Last Modified:", QLabel(self.format_timestamp(file_obj["last_modified"])))
+        form_layout.addRow("Last Accessed:", QLabel(self.format_timestamp(file_obj["last_accessed"])))
+        form_layout.addRow("Score:", QLabel(f'{file_obj["score"]}%'))
+        form_layout.addRow("Confidence:", QLabel(file_obj["confidence_label"]))
+        form_layout.addRow(
+            "Flags:",
+            QLabel(", ".join(active_flags) if active_flags else "No active flags")
+        )
+
+        layout.addLayout(form_layout)
+
+        reasons_title = QLabel("Reasons")
+        reasons_title.setObjectName("sectionHint")
+        layout.addWidget(reasons_title)
+
+        reasons_text = "\n".join(f"• {reason}" for reason in file_obj["reasons"])
+        reasons_label = QLabel(reasons_text or "No reasons recorded")
+        reasons_label.setWordWrap(True)
+        layout.addWidget(reasons_label)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Close)
+        button_box.rejected.connect(dialog.reject)
+        button_box.accepted.connect(dialog.accept)
+        layout.addWidget(button_box)
+
+        dialog.setLayout(layout)
+        dialog.exec()
 
     def update_results_summary(self, files_to_show):
         self.current_displayed_files = files_to_show
