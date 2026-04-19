@@ -272,7 +272,12 @@ class FileCleanerApp(QWidget):
         rec_dir = []
 
         #Go through the folder and add all the files to the file list
-        for file_name in os.listdir(folder):
+        try:
+            entries = os.listdir(folder)
+        except OSError:
+            return
+
+        for file_name in entries:
             full_path = os.path.join(folder, file_name)
 
             if os.path.isfile(full_path):
@@ -319,16 +324,24 @@ class FileCleanerApp(QWidget):
         )
 
         if reply == QMessageBox.Yes:
+            failed_deletes = []
             for item in selected_items:
-                # replace with os.remove(file_path) when actually ready to delete files
-                # print("File To Be Deleted" + self.file_list_string[self.file_list.row(item)])
-                os.remove(self.file_list_string[self.file_list.row(item)])
-                
-                self.file_list.takeItem(self.file_list.row(item))
-                
-                
+                file_path = item.text()
+                try:
+                    os.remove(file_path)
+                    self.file_list_string = [p for p in self.file_list_string if p != file_path]
+                    self.file_list.takeItem(self.file_list.row(item))
+                except OSError as error:
+                    failed_deletes.append(f"{file_path}: {error}")
 
-            QMessageBox.information(self, "Done", "Selected files removed from the list.")
+            if failed_deletes:
+                QMessageBox.warning(
+                    self,
+                    "Partial Delete",
+                    "Some files could not be deleted:\n\n" + "\n".join(failed_deletes),
+                )
+            else:
+                QMessageBox.information(self, "Done", "Selected files removed from the list.")
 
 
 if __name__ == "__main__":
