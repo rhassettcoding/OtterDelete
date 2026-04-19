@@ -249,22 +249,6 @@ class FileCleanerApp(QWidget):
             return False
 
 
-    def scan_files(self):
-        if not self.selected_folder:
-            QMessageBox.warning(self, "Warning", "Please select a folder first.")
-            return
-
-        self.file_list.clear()
-        self.file_list_string.clear()
-        self.dir_list.clear()
-
-        self.show_loading("Scanning", "Scanning files. Please wait...")
-        try:
-            self.scan_files_recursive(self.selected_folder)
-        finally:
-            self.hide_loading()
-
-
     def is_file_old(self, full_path):
         # --> returns true if the file has aged past selected time stamp #
         file_last_modified = os.path.getmtime(full_path)
@@ -283,50 +267,47 @@ class FileCleanerApp(QWidget):
         else:
             return False
     
-    def scan_files_recursive(self, folder):
+    def scan_files(self):
+        if not self.selected_folder:
+            QMessageBox.warning(self, "Warning", "Please select a folder first.")
+            return
+
+        self.file_list.clear()
+        self.file_list_string.clear()
+        self.dir_list.clear()
+
+        self.show_loading("Scanning", "Scanning files. Please wait...")
+        self.file_list.setUpdatesEnabled(False)
+        try:
+            self.scan_files_recursive(self.selected_folder)
+        finally:
+            self.file_list.setUpdatesEnabled(True)
+            self.hide_loading()
+
+def scan_files_recursive(self, folder):
+    for root, dirs, files in os.walk(folder):
         if self.loading_dialog and self.loading_dialog.wasCanceled():
             return
+
         QApplication.processEvents()
 
-        rec_dir = []
+        for file_name in files:
+            full_path = os.path.join(root, file_name)
 
-        #Go through the folder and add all the files to the file list
-        try:
-            entries = os.listdir(folder)
-        except OSError:
-            return
+            big = True
+            dupe = True
+            old = True
 
-        for file_name in entries:
-            full_path = os.path.join(folder, file_name)
+            if SEARCH_PARAMS["CHECK_SIZE"]:
+                big = self.isBig(full_path)
+            if SEARCH_PARAMS["CHECK_DUPLICATES"]:
+                dupe = self.isDuplicate(full_path)
+            if SEARCH_PARAMS["CHECK_AGE"]:
+                old = self.is_file_old(full_path)
 
-            if os.path.isfile(full_path):
-                big = True
-                dupe = True
-                old = True
-                if(SEARCH_PARAMS["CHECK_SIZE"]):
-                    big = self.isBig(full_path)
-                if(SEARCH_PARAMS["CHECK_DUPLICATES"]):
-                    dupe = self.isDuplicate(full_path)
-                if(SEARCH_PARAMS["CHECK_AGE"]):
-                    old = self.is_file_old(full_path)
-
-
-                if(big and dupe and old):
-                   self.file_list.addItem(full_path)
-                   self.file_list_string.append(full_path)
-                
-                
-            elif(os.path.isdir(full_path)):
-                #add all the folders to rec_dir
-                rec_dir.append(full_path)
-        
-        #If rec_dir empty return
-        if(len(rec_dir) == 0):
-            return
-
-        #Then in a foreach loop call this on all the folders in rec_dir
-        for recFolder in rec_dir:
-            self.scan_files_recursive(recFolder)
+            if big and dupe and old:
+                self.file_list.addItem(full_path)
+                self.file_list_string.append(full_path)
 
     def delete_files(self):
         selected_items = self.file_list.selectedItems()
