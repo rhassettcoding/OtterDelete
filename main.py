@@ -574,6 +574,10 @@ class FileCleanerApp(QWidget):
             self.label.setText(f"Selected Folder: {folder}")
             #scan the files directly after selecting a folder
             self.scan_files() 
+
+    #Deprecated to be replaced with getDuplicates
+    def isDuplicate(self, file):
+        return True
     
     def build_file_object(self, full_path):
         stats = os.stat(full_path)
@@ -870,19 +874,20 @@ class FileCleanerApp(QWidget):
         finally:
             self.file_list.setUpdatesEnabled(True)
             self.hide_loading()
+            self.filter_files()
     
 
-    def scan_files(self):
-        if not self.selected_folder:
-            QMessageBox.warning(self, "Warning", "Please select a folder first.")
-            return
+    # def scan_files(self):
+    #     if not self.selected_folder:
+    #         QMessageBox.warning(self, "Warning", "Please select a folder first.")
+    #         return
 
-        self.file_list.clear()
-        self.dir_list.clear()
-        self.all_files.clear()
+    #     self.file_list.clear()
+    #     self.dir_list.clear()
+    #     self.all_files.clear()
 
-        self.scan_files_recursive(self.selected_folder)
-        self.filter_files()
+    #     self.scan_files_recursive(self.selected_folder)
+    #     self.filter_files()
 
     def scan_files_recursive(self, folder):
         for root, dirs, files in os.walk(folder):
