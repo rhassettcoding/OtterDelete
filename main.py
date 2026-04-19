@@ -574,10 +574,6 @@ class FileCleanerApp(QWidget):
             self.label.setText(f"Selected Folder: {folder}")
             #scan the files directly after selecting a folder
             self.scan_files() 
-
-    #Deprecated to be replaced with getDuplicates
-    def isDuplicate(self, file):
-        return True
     
     def build_file_object(self, full_path):
         stats = os.stat(full_path)
