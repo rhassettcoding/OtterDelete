@@ -970,7 +970,7 @@ class FileCleanerApp(QWidget):
         if reply == QMessageBox.Yes:
             failed_deletes = []
             for item in selected_items:
-                file_path = item.text()
+                file_path = file_path = item.data(Qt.UserRole)
                 try:
                     os.remove(file_path)
                     self.file_list_string = [p for p in self.file_list_string if p != file_path]
