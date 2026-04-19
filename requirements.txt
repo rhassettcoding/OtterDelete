@@ -1,0 +1,14 @@
+{
+    "name": "hw1.pdf",
+    "path": "/Users/me/School/hw1.pdf",
+    "size": 48123,
+    "last_modified": 1712000000,
+    "last_accessed": 1711000000,
+    "extension": ".pdf",
+    "flags": {
+        "is_old": True,
+        "is_forgotten": False,
+        "is_big": False,
+        "is_duplicate": False
+    }
+}

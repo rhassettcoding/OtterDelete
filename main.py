@@ -1,13 +1,18 @@
 import sys
 import os
+import time
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QListWidget, QFileDialog, QMessageBox, QAbstractItemView,
-    QLineEdit, QFrame
+    QLineEdit, QFrame, QListWidgetItem
 )
 
 
 class FileCleanerApp(QWidget):
+    OLD_FILE_DAYS = 180
+    BIG_FILE_BYTES = 50 * 1024 * 1024
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("OtterDelete")
@@ -119,14 +124,14 @@ class FileCleanerApp(QWidget):
     def scan_files_recursive(self, folder):
         rec_dir = []
 
-        #Go through the folder and add all the files to the file list
+        # Go through the folder and add all the files to the file list.
         for file_name in os.listdir(folder):
             full_path = os.path.join(folder, file_name)
 
             if os.path.isfile(full_path):
-                self.all_files.append(full_path)
+                self.all_files.append(self.build_file_object(full_path))
             elif(os.path.isdir(full_path)):
-                #add all the folders to rec_dir
+                # Add all the folders to rec_dir.
                 rec_dir.append(full_path)
         
         
@@ -138,50 +143,105 @@ class FileCleanerApp(QWidget):
         for recFolder in rec_dir:
             self.scan_files_recursive(recFolder)
 
+    def build_file_object(self, path):
+        stats = os.stat(path)
+        file_obj = {
+            "name": os.path.basename(path),
+            "path": path,
+            "size": stats.st_size,
+            "last_modified": stats.st_mtime,
+            "last_accessed": stats.st_atime,
+            "extension": os.path.splitext(path)[1].lower(),
+            "flags": {
+                "is_old": False,
+                "is_forgotten": False,
+                "is_big": False
+            },
+            "reasons": []
+        }
+        self.apply_heuristics(file_obj)
+        return file_obj
+
+    def apply_heuristics(self, file_obj):
+        current_time = time.time()
+        old_file_seconds = self.OLD_FILE_DAYS * 24 * 60 * 60
+
+        if current_time - file_obj["last_modified"] > old_file_seconds:
+            file_obj["flags"]["is_old"] = True
+            file_obj["reasons"].append(
+                f"Last modified over {self.OLD_FILE_DAYS} days ago"
+            )
+
+        if current_time - file_obj["last_accessed"] > old_file_seconds:
+            file_obj["flags"]["is_forgotten"] = True
+            file_obj["reasons"].append(
+                f"Last accessed over {self.OLD_FILE_DAYS} days ago"
+            )
+
+        if file_obj["size"] > self.BIG_FILE_BYTES:
+            file_obj["flags"]["is_big"] = True
+            file_obj["reasons"].append("File larger than 50 MB")
+
+    def is_flagged(self, file_obj):
+        return any(file_obj["flags"].values())
+
+    def format_file_display(self, file_obj):
+        tags = []
+
+        if file_obj["flags"]["is_old"]:
+            tags.append("[OLD]")
+        if file_obj["flags"]["is_forgotten"]:
+            tags.append("[FORGOTTEN]")
+        if file_obj["flags"]["is_big"]:
+            tags.append("[BIG]")
+
+        if tags:
+            return f'{file_obj["name"]} {" ".join(tags)}'
+        return file_obj["name"]
+
     def refresh_file_list(self, files_to_show):
         self.file_list.clear()
-        for file_path in files_to_show:
-            self.file_list.addItem(file_path)
+        for file_obj in files_to_show:
+            item = QListWidgetItem(self.format_file_display(file_obj))
+            item.setData(Qt.UserRole, file_obj["path"])
+            item.setToolTip("\n".join(file_obj["reasons"]) or file_obj["path"])
+            self.file_list.addItem(item)
 
     def filter_files(self):
-
-        if not self.include_keywords and not self.exclude_keywords:
-            self.refresh_file_list(self.all_files)
-            return
+        filtered_files = [
+            file_obj for file_obj in self.all_files
+            if self.is_flagged(file_obj)
+        ]
 
         if len(self.include_keywords) == 1:
             keyword = next(iter(self.include_keywords))
             filtered_files = [
-                file_path for file_path in self.all_files
-                if keyword in os.path.basename(file_path).lower()
+                file_obj for file_obj in filtered_files
+                if keyword in file_obj["name"].lower()
             ]
-            self.refresh_file_list(filtered_files)
-            return
-
-        if self.or_button.isChecked():
-            filtered_files = [
-                file_path for file_path in self.all_files
-                if any(
-                    keyword in os.path.basename(file_path).lower()
-                    for keyword in self.include_keywords
-                )
-            ]
-        elif self.and_button.isChecked():
-            filtered_files = [
-                file_path for file_path in self.all_files
-                if all(
-                    keyword in os.path.basename(file_path).lower()
-                    for keyword in self.include_keywords
-                )
-            ]
-        else:
-            filtered_files = self.all_files
+        elif len(self.include_keywords) > 1:
+            if self.or_button.isChecked():
+                filtered_files = [
+                    file_obj for file_obj in filtered_files
+                    if any(
+                        keyword in file_obj["name"].lower()
+                        for keyword in self.include_keywords
+                    )
+                ]
+            elif self.and_button.isChecked():
+                filtered_files = [
+                    file_obj for file_obj in filtered_files
+                    if all(
+                        keyword in file_obj["name"].lower()
+                        for keyword in self.include_keywords
+                    )
+                ]
 
         if self.exclude_keywords:
             filtered_files = [
-                file_path for file_path in filtered_files
+                file_obj for file_obj in filtered_files
                 if not any(
-                    keyword in os.path.basename(file_path).lower()
+                    keyword in file_obj["name"].lower()
                     for keyword in self.exclude_keywords
                 )
             ]
@@ -206,10 +266,11 @@ class FileCleanerApp(QWidget):
 
         if reply == QMessageBox.Yes:
             for item in selected_items:
-                file_path = item.text()
-                if file_path in self.all_files:
-                    self.all_files.remove(file_path)
-                # replace with os.remove(file_path) when actually ready to delete files
+                file_path = item.data(Qt.UserRole)
+                self.all_files = [
+                    file_obj for file_obj in self.all_files
+                    if file_obj["path"] != file_path
+                ]
                 self.file_list.takeItem(self.file_list.row(item))
 
             QMessageBox.information(self, "Done", "Selected files removed from the list.")
@@ -234,6 +295,10 @@ class FileCleanerApp(QWidget):
         keyword = self.keyword_input.text().strip().lower()
 
         if not keyword:
+            return
+
+        if keyword in self.include_keywords:
+            self.keyword_input.clear()
             return
         
         if len(self.include_keywords) >=1:
@@ -289,6 +354,7 @@ class FileCleanerApp(QWidget):
 
     def exclude_init(self):
         self.exclude_layout.removeWidget(self.exclude_button)
+        self.exclude_button.deleteLater()
 
         self.exclude_input = QLineEdit()
         self.exclude_input.setPlaceholderText("Add keywords to exclude from file names")
@@ -299,6 +365,10 @@ class FileCleanerApp(QWidget):
         keyword = self.exclude_input.text().strip().lower()
 
         if not keyword:
+            return
+
+        if keyword in self.exclude_keywords:
+            self.exclude_input.clear()
             return
         
 
@@ -332,14 +402,14 @@ class FileCleanerApp(QWidget):
             }
         """)
 
-        input_index = self.exclude_layout.indexOf(self.keyword_input)
+        input_index = self.exclude_layout.indexOf(self.exclude_input)
         self.exclude_layout.insertWidget(input_index, chip)
 
     def remove_exclude_keyword(self, keyword, chip):
         if keyword in self.exclude_keywords:
             self.exclude_keywords.remove(keyword)
 
-        self.keyword_layout.removeWidget(chip)
+        self.exclude_layout.removeWidget(chip)
         chip.deleteLater()
         self.filter_files()
 
