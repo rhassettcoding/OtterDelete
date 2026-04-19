@@ -283,31 +283,31 @@ class FileCleanerApp(QWidget):
         finally:
             self.file_list.setUpdatesEnabled(True)
             self.hide_loading()
+    
+    def scan_files_recursive(self, folder):
+        for root, dirs, files in os.walk(folder):
+            if self.loading_dialog and self.loading_dialog.wasCanceled():
+                return
 
-def scan_files_recursive(self, folder):
-    for root, dirs, files in os.walk(folder):
-        if self.loading_dialog and self.loading_dialog.wasCanceled():
-            return
+            QApplication.processEvents()
 
-        QApplication.processEvents()
+            for file_name in files:
+                full_path = os.path.join(root, file_name)
 
-        for file_name in files:
-            full_path = os.path.join(root, file_name)
+                big = True
+                dupe = True
+                old = True
 
-            big = True
-            dupe = True
-            old = True
+                if SEARCH_PARAMS["CHECK_SIZE"]:
+                    big = self.isBig(full_path)
+                if SEARCH_PARAMS["CHECK_DUPLICATES"]:
+                    dupe = self.isDuplicate(full_path)
+                if SEARCH_PARAMS["CHECK_AGE"]:
+                    old = self.is_file_old(full_path)
 
-            if SEARCH_PARAMS["CHECK_SIZE"]:
-                big = self.isBig(full_path)
-            if SEARCH_PARAMS["CHECK_DUPLICATES"]:
-                dupe = self.isDuplicate(full_path)
-            if SEARCH_PARAMS["CHECK_AGE"]:
-                old = self.is_file_old(full_path)
-
-            if big and dupe and old:
-                self.file_list.addItem(full_path)
-                self.file_list_string.append(full_path)
+                if big and dupe and old:
+                    self.file_list.addItem(full_path)
+                    self.file_list_string.append(full_path)
 
     def delete_files(self):
         selected_items = self.file_list.selectedItems()
@@ -342,6 +342,8 @@ def scan_files_recursive(self, folder):
                 )
             else:
                 QMessageBox.information(self, "Done", "Selected files removed from the list.")
+
+
 
 
 if __name__ == "__main__":
