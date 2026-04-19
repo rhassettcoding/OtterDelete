@@ -440,10 +440,24 @@ class FileCleanerApp(QWidget):
 
         self.delete_button = QPushButton("Delete Selected Files")
         self.delete_button.clicked.connect(self.delete_files)
-        layout.addWidget(self.delete_button)
-
-        self.setLayout(layout)
         self.loading_dialog = None
+
+    
+        action_row.addWidget(self.delete_button)
+
+        results_layout.addLayout(action_row)
+
+        splitter.addWidget(sidebar_widget)
+        splitter.addWidget(results_widget)
+        splitter.setSizes([370, 710])
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+
+        self.on_check_age_toggled(SEARCH_PARAMS["CHECK_AGE"])
+        self.on_check_size_toggled(SEARCH_PARAMS["CHECK_SIZE"])
+
+        self.setLayout(root_layout)
+        self.update_selection_summary()
 
     def show_loading(self, title, message):
         self.loading_dialog = QProgressDialog(message, "Cancel", 0, 0, self)
@@ -461,21 +475,6 @@ class FileCleanerApp(QWidget):
             QApplication.processEvents()
         self.delete_button.setObjectName("dangerButton")
         self.delete_button.setEnabled(False)
-        action_row.addWidget(self.delete_button)
-
-        results_layout.addLayout(action_row)
-
-        splitter.addWidget(sidebar_widget)
-        splitter.addWidget(results_widget)
-        splitter.setSizes([370, 710])
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-
-        self.on_check_age_toggled(SEARCH_PARAMS["CHECK_AGE"])
-        self.on_check_size_toggled(SEARCH_PARAMS["CHECK_SIZE"])
-
-        self.setLayout(root_layout)
-        self.update_selection_summary()
 
     def changeMaxSize(self):
         newSize = self.size_text.text()
@@ -859,20 +858,6 @@ class FileCleanerApp(QWidget):
         for file_name in os.listdir(folder):
             full_path = os.path.join(folder, file_name)
 
-                big = True
-                dupe = True
-                old = True
-
-                if SEARCH_PARAMS["CHECK_SIZE"]:
-                    big = self.isBig(full_path)
-                if SEARCH_PARAMS["CHECK_DUPLICATES"]:
-                    dupe = self.isDuplicate(full_path)
-                if SEARCH_PARAMS["CHECK_AGE"]:
-                    old = self.is_file_old(full_path)
-
-                if big and dupe and old:
-                    self.file_list.addItem(full_path)
-                    self.file_list_string.append(full_path)
             if os.path.isfile(full_path):
                 self.all_files.append(self.build_file_object(full_path))
             elif(os.path.isdir(full_path)):
