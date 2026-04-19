@@ -13,6 +13,8 @@ SEARCH_PARAMS = {
     "CHECK_AGE":True,
     "CHECK_SIZE":True,
 }
+
+
 from PySide6.QtGui import QIntValidator
 
 file_size = {"kb":1024, "mb":1024000, "gb":1024000000}
@@ -23,7 +25,7 @@ class FileCleanerApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("OtterDelete")
-        self.setGeometry(100, 100, 600, 400)
+        self.setGeometry(100, 100, 600, 700)
 
         self.selected_folder = ""
         self.selected_time_value = 1
@@ -31,19 +33,19 @@ class FileCleanerApp(QWidget):
 
         layout = QVBoxLayout()
 
-        self.label = QLabel("Choose a folder to scan for old school files.")
+        self.label = QLabel("Choose a starting folder.")
         layout.addWidget(self.label)
 
         self.select_button = QPushButton("Select Folder")
         self.select_button.clicked.connect(self.select_folder)
         layout.addWidget(self.select_button)
 
-        self.search_options_label = QLabel("Search Options:")
-        layout.addWidget(self.search_options_label)
-
         self.scan_button = QPushButton("Scan Files")
         self.scan_button.clicked.connect(self.scan_files)
         layout.addWidget(self.scan_button)
+
+        self.search_options_label = QLabel("Search Options:")
+        layout.addWidget(self.search_options_label)
 
         search_options_layout = QHBoxLayout()
         self.check_duplicates_cb = QCheckBox("Check Duplicates")
@@ -62,6 +64,31 @@ class FileCleanerApp(QWidget):
         search_options_layout.addWidget(self.check_size_cb)
 
         layout.addLayout(search_options_layout)
+
+        self.sizeSelectorLayout = QHBoxLayout()
+
+        self.is_big_label = QLabel("Size: ")
+
+        #Add a textbox
+        self.size_text = QLineEdit()
+        self.size_text.setValidator(QIntValidator(0, 9999, self))
+
+        #Add a drop down
+        self.size_scale = QComboBox()
+        for k in file_size.keys():
+            self.size_scale.addItem(k)
+
+        #Add a button to confirm
+        self.size_confirm_button = QPushButton("Confirm")
+        self.size_confirm_button.clicked.connect(self.changeMaxSize)
+
+        #Add all the widgets in order
+        self.sizeSelectorLayout.addWidget(self.is_big_label)
+        self.sizeSelectorLayout.addWidget(self.size_text)
+        self.sizeSelectorLayout.addWidget(self.size_scale)
+        self.sizeSelectorLayout.addWidget(self.size_confirm_button)
+
+        layout.addLayout(self.sizeSelectorLayout)
 
         # Time period selector --------------->
         self.time_period_label = QLabel("Files modified past:")
@@ -96,33 +123,6 @@ class FileCleanerApp(QWidget):
         layout.addLayout(self.time_selector_layout)
         
         
-
-        layout.addWidget(self.scan_button)
-
-        self.sizeSelectorLayout = QHBoxLayout()
-
-        self.is_big_label = QLabel("Size: ")
-
-        #Add a textbox
-        self.size_text = QLineEdit()
-        self.size_text.setValidator(QIntValidator(0, 9999, self))
-
-        #Add a drop down
-        self.size_scale = QComboBox()
-        for k in file_size.keys():
-            self.size_scale.addItem(k)
-
-        #Add a button to confirm
-        self.size_confirm_button = QPushButton("Confirm")
-        self.size_confirm_button.clicked.connect(self.changeMaxSize)
-
-        #Add all the widgets in order
-        self.sizeSelectorLayout.addWidget(self.is_big_label)
-        self.sizeSelectorLayout.addWidget(self.size_text)
-        self.sizeSelectorLayout.addWidget(self.size_scale)
-        self.sizeSelectorLayout.addWidget(self.size_confirm_button)
-
-        layout.addLayout(self.sizeSelectorLayout)
 
         self.file_list_label = QLabel("Files")
         layout.addWidget(self.file_list_label)
@@ -163,7 +163,7 @@ class FileCleanerApp(QWidget):
         format = file_size_a[newScale]
         
         mult = file_size[format]
-        print("In Max Size")
+        # print("In Max Size")
         # print(format)
         # print(file_size[format])
 
@@ -174,7 +174,7 @@ class FileCleanerApp(QWidget):
             sizeText = 0
         global max_size
         max_size = sizeText*mult
-        print(max_size)
+        # print(max_size)
         return
 
     def on_time_value_changed(self):
@@ -201,6 +201,10 @@ class FileCleanerApp(QWidget):
 
     def on_check_size_toggled(self, checked):
         SEARCH_PARAMS["CHECK_SIZE"] = checked
+        self.is_big_label.setVisible(checked)
+        for i in range(self.sizeSelectorLayout.count()):
+            self.sizeSelectorLayout.itemAt(i).widget().setVisible(checked)
+        
 
     def select_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder To Scan")
@@ -213,19 +217,20 @@ class FileCleanerApp(QWidget):
             #scan the files directly after selecting a folder
             self.scan_files() 
 
+    #Deprecated to be replaced with getDuplicates
     def isDuplicate(self, file):
-        if(self.is_duplicate_checkbox):
-            #Check the file_list does anything have the same suffix, minus the numbers?
-            #if there is return false
-            for check in self.file_list_string:
-                if(check == file):
-                    return False
+        # if(self.is_duplicate_checkbox):
+        #     #Check the file_list does anything have the same suffix, minus the numbers?
+        #     #if there is return false
+        #     for check in self.file_list_string:
+        #         if(check == file):
+        #             return False
         return True
     
     def isBig(self, file):
-        print(file)
-        print("Size: " + str(os.path.getsize(file)))
-        print("Max Size: " + str(max_size))
+        # print(file)
+        # print("Size: " + str(os.path.getsize(file)))
+        # print("Max Size: " + str(max_size))
         if(os.path.getsize(file) > max_size):
             return True
         else:
@@ -271,7 +276,18 @@ class FileCleanerApp(QWidget):
             full_path = os.path.join(folder, file_name)
 
             if os.path.isfile(full_path):
-                if(self.isBig(full_path)):
+                big = True
+                dupe = True
+                old = True
+                if(SEARCH_PARAMS["CHECK_SIZE"]):
+                    big = self.isBig(full_path)
+                if(SEARCH_PARAMS["CHECK_DUPLICATES"]):
+                    dupe = self.isDuplicate(full_path)
+                if(SEARCH_PARAMS["CHECK_AGE"]):
+                    old = self.is_file_old(full_path)
+
+
+                if(big and dupe and old):
                    self.file_list.addItem(full_path)
                    self.file_list_string.append(full_path)
                 
@@ -305,7 +321,7 @@ class FileCleanerApp(QWidget):
         if reply == QMessageBox.Yes:
             for item in selected_items:
                 # replace with os.remove(file_path) when actually ready to delete files
-                print("File To Be Deleted" + self.file_list_string[self.file_list.row(item)])
+                # print("File To Be Deleted" + self.file_list_string[self.file_list.row(item)])
                 os.remove(self.file_list_string[self.file_list.row(item)])
                 
                 self.file_list.takeItem(self.file_list.row(item))
