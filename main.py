@@ -1,11 +1,13 @@
 import sys
 import os
 import time
+from datetime import datetime
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox,
     QPushButton, QListWidget, QFileDialog, QMessageBox, QAbstractItemView,
-    QRadioButton, QButtonGroup, QCheckBox, QListWidgetItem, QFrame, QSplitter
+    QRadioButton, QButtonGroup, QCheckBox, QListWidgetItem, QFrame, QSplitter,
+    QDialog, QDialogButtonBox, QFormLayout
 )
 from PySide6.QtGui import QIntValidator
 
@@ -30,6 +32,7 @@ class FileCleanerApp(QWidget):
         self.selected_time_unit = "month"
         self.max_size = -1
         self.current_displayed_files = []
+        self.confidence_filter = "ALL"
 
         root_layout = QVBoxLayout()
         root_layout.setContentsMargins(18, 18, 18, 18)
@@ -174,6 +177,21 @@ class FileCleanerApp(QWidget):
             QLabel#fileMeta {
                 color: #52606D;
                 font-size: 12px;
+            }
+            QLabel#scoreLabel {
+                color: #4A90E2;
+                font-size: 12px;
+                font-weight: 700;
+                min-width: 120px;
+            }
+            QPushButton#infoButton {
+                min-width: 28px;
+                max-width: 28px;
+                min-height: 28px;
+                max-height: 28px;
+                border-radius: 14px;
+                padding: 0px;
+                font-weight: 700;
             }
             QSplitter::handle {
                 background-color: #D8E1EB;
@@ -323,7 +341,6 @@ class FileCleanerApp(QWidget):
         self.month_radio = QRadioButton("M")
         self.year_radio = QRadioButton("Y")
         self.month_radio.setChecked(True)
-      \
 
         self.time_unit_group = QButtonGroup(self)
         self.time_unit_group.addButton(self.day_radio)
@@ -337,6 +354,25 @@ class FileCleanerApp(QWidget):
         self.time_selector_layout.addWidget(self.month_radio)
         self.time_selector_layout.addWidget(self.year_radio)
         sidebar_layout.addLayout(self.time_selector_layout)
+
+        self.add_sidebar_header(sidebar_layout, "SCORE FILTERS")
+
+        confidence_filter_label = QLabel("Confidence level:")
+        confidence_filter_label.setObjectName("sectionHint")
+        sidebar_layout.addWidget(confidence_filter_label)
+
+        self.confidence_filter_dropdown = QComboBox()
+        self.confidence_filter_dropdown.addItems([
+            "All",
+            "Low Confidence",
+            "Medium Confidence",
+            "High Confidence"
+        ])
+        self.confidence_filter_dropdown.currentIndexChanged.connect(
+            self.on_confidence_filter_changed
+        )
+        sidebar_layout.addWidget(self.confidence_filter_dropdown)
+
         sidebar_layout.addStretch()
 
         self.scan_button = QPushButton("Scan Files")
@@ -461,6 +497,20 @@ class FileCleanerApp(QWidget):
         for i in range(self.sizeSelectorLayout.count()):
             self.sizeSelectorLayout.itemAt(i).widget().setVisible(checked)
         self.refresh_heuristics()
+
+    def on_confidence_filter_changed(self):
+        text = self.confidence_filter_dropdown.currentText()
+
+        if text == "Low Confidence":
+            self.confidence_filter = "LOW"
+        elif text == "Medium Confidence":
+            self.confidence_filter = "MEDIUM"
+        elif text == "High Confidence":
+            self.confidence_filter = "HIGH"
+        else:
+            self.confidence_filter = "ALL"
+
+        self.filter_files()
         
 
     def select_folder(self):
@@ -493,6 +543,8 @@ class FileCleanerApp(QWidget):
                 "is_big": False,
             },
             "reasons": [],
+            "score": 0,
+            "confidence_label": "Low Confidence",
         }
         self.apply_heuristics(file_obj)
         return file_obj
@@ -526,6 +578,27 @@ class FileCleanerApp(QWidget):
         if file_obj["flags"]["is_big"]:
             file_obj["reasons"].append("File size exceeds selected threshold")
 
+        self.apply_scoring(file_obj)
+
+    def apply_scoring(self, file_obj):
+        score = 0
+
+        if file_obj["flags"]["is_old"]:
+            score += 60
+
+        if file_obj["flags"]["is_big"]:
+            score += 40
+
+        score = max(0, min(score, 100))
+        file_obj["score"] = score
+
+        if score <= 50:
+            file_obj["confidence_label"] = "Low Confidence"
+        elif score <= 80:
+            file_obj["confidence_label"] = "Medium Confidence"
+        else:
+            file_obj["confidence_label"] = "Very Confident"
+
     def add_sidebar_header(self, layout, text):
         header = QLabel(text)
         header.setObjectName("sidebarHeader")
@@ -554,6 +627,9 @@ class FileCleanerApp(QWidget):
         tag_label.setObjectName(object_name)
         return tag_label
 
+    def format_timestamp(self, timestamp):
+        return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M")
+
     def create_result_row(self, file_obj):
         row_widget = QWidget()
         row_layout = QHBoxLayout()
@@ -566,6 +642,12 @@ class FileCleanerApp(QWidget):
         name_label.setObjectName("fileName")
         row_layout.addWidget(name_label, 1)
 
+        score_label = QLabel(
+            f'{file_obj["score"]}% {file_obj["confidence_label"]}'
+        )
+        score_label.setObjectName("scoreLabel")
+        row_layout.addWidget(score_label)
+
         size_label = QLabel(self.format_size(file_obj["size"]))
         size_label.setObjectName("fileMeta")
         row_layout.addWidget(size_label)
@@ -575,7 +657,67 @@ class FileCleanerApp(QWidget):
         if file_obj["flags"]["is_big"]:
             row_layout.addWidget(self.create_tag_label("BIG", "pillBig"))
 
+        info_button = QPushButton("i")
+        info_button.setObjectName("infoButton")
+        info_button.clicked.connect(
+            lambda _, current_file=file_obj: self.show_file_details(current_file)
+        )
+        row_layout.addWidget(info_button)
+
         return row_widget
+
+    def show_file_details(self, file_obj):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("OtterDelete - File Details")
+        dialog.setModal(True)
+        dialog.resize(560, 420)
+
+        layout = QVBoxLayout()
+
+        title_label = QLabel("File Details")
+        title_label.setObjectName("sectionTitle")
+        layout.addWidget(title_label)
+
+        form_layout = QFormLayout()
+        form_layout.setSpacing(10)
+
+        active_flags = []
+        if file_obj["flags"]["is_old"]:
+            active_flags.append("OLD")
+        if file_obj["flags"]["is_big"]:
+            active_flags.append("BIG")
+
+        form_layout.addRow("Name:", QLabel(file_obj["name"]))
+        form_layout.addRow("Full Path:", QLabel(file_obj["path"]))
+        form_layout.addRow("Size:", QLabel(self.format_size(file_obj["size"])))
+        form_layout.addRow("Extension:", QLabel(file_obj["extension"] or "None"))
+        form_layout.addRow("Last Modified:", QLabel(self.format_timestamp(file_obj["last_modified"])))
+        form_layout.addRow("Last Accessed:", QLabel(self.format_timestamp(file_obj["last_accessed"])))
+        form_layout.addRow("Score:", QLabel(f'{file_obj["score"]}%'))
+        form_layout.addRow("Confidence:", QLabel(file_obj["confidence_label"]))
+        form_layout.addRow(
+            "Flags:",
+            QLabel(", ".join(active_flags) if active_flags else "No active flags")
+        )
+
+        layout.addLayout(form_layout)
+
+        reasons_title = QLabel("Reasons")
+        reasons_title.setObjectName("sectionHint")
+        layout.addWidget(reasons_title)
+
+        reasons_text = "\n".join(f"• {reason}" for reason in file_obj["reasons"])
+        reasons_label = QLabel(reasons_text or "No reasons recorded")
+        reasons_label.setWordWrap(True)
+        layout.addWidget(reasons_label)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Close)
+        button_box.rejected.connect(dialog.reject)
+        button_box.accepted.connect(dialog.accept)
+        layout.addWidget(button_box)
+
+        dialog.setLayout(layout)
+        dialog.exec()
 
     def update_results_summary(self, files_to_show):
         self.current_displayed_files = files_to_show
@@ -595,7 +737,7 @@ class FileCleanerApp(QWidget):
         selected_items = self.file_list.selectedItems()
 
         if not selected_items:
-            self.selection_summary_label.setText("Select files to see potential space savings.")
+            self.selection_summary_label.setText("Potential space savings.")
             self.delete_button.setText("Delete Selected Files")
             self.delete_button.setEnabled(False)
             return
@@ -715,6 +857,25 @@ class FileCleanerApp(QWidget):
                 file_obj for file_obj in filtered_files
                 if not any(keyword in file_obj["name"].lower() for keyword in self.exclude_keywords)
             ]
+
+        if self.confidence_filter != "ALL":
+            if self.confidence_filter == "LOW":
+                filtered_files = [
+                    file_obj for file_obj in filtered_files
+                    if file_obj["score"] <= 50
+                ]
+            elif self.confidence_filter == "MEDIUM":
+                filtered_files = [
+                    file_obj for file_obj in filtered_files
+                    if 50 < file_obj["score"] <= 80
+                ]
+            elif self.confidence_filter == "HIGH":
+                filtered_files = [
+                    file_obj for file_obj in filtered_files
+                    if file_obj["score"] > 80
+                ]
+
+        filtered_files.sort(key=lambda file_obj: file_obj["score"], reverse=True)
 
         self.refresh_file_list(filtered_files)
 
