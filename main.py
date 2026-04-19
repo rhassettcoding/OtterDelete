@@ -2,11 +2,12 @@ import sys
 import os
 import time
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QHBoxLayout, QLineEdit, QComboBox,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox,
     QPushButton, QListWidget, QFileDialog, QMessageBox, QAbstractItemView,
     QRadioButton, QButtonGroup, QLineEdit, QCheckBox, QProgressDialog 
 )
 from PySide6.QtGui import QIntValidator
+from PySide6.QtCore import Qt
 
 SEARCH_PARAMS = {
     "CHECK_DUPLICATES":True,
@@ -14,8 +15,6 @@ SEARCH_PARAMS = {
     "CHECK_SIZE":True,
 }
 
-
-from PySide6.QtGui import QIntValidator
 
 file_size = {"kb":1024, "mb":1024000, "gb":1024000000}
 file_size_a = ["kb", "mb", "gb"]
@@ -139,9 +138,6 @@ class FileCleanerApp(QWidget):
         self.dir_list.setSelectionMode(QAbstractItemView.MultiSelection) #allows us to select multiple files
         # layout.addWidget(self.dir_list)
 
-        #This lets everything start out selected so as few clicks as possible to delete things
-        self.file_list.selectAll()
-
         self.select_all_button = QPushButton("Select All Files")
         self.select_all_button.clicked.connect(self.file_list.selectAll)
         layout.addWidget(self.select_all_button)
@@ -156,6 +152,22 @@ class FileCleanerApp(QWidget):
         layout.addWidget(self.delete_button)
 
         self.setLayout(layout)
+        self.loading_dialog = None
+
+    def show_loading(self, title, message):
+        self.loading_dialog = QProgressDialog(message, "Cancel", 0, 0, self)
+        self.loading_dialog.setWindowTitle(title)
+        self.loading_dialog.setWindowModality(Qt.WindowModal)
+        self.loading_dialog.setMinimumDuration(0)
+        self.loading_dialog.setValue(0)
+        self.loading_dialog.show()
+        QApplication.processEvents()
+
+    def hide_loading(self):
+        if self.loading_dialog:
+            self.loading_dialog.close()
+            self.loading_dialog = None
+            QApplication.processEvents()
 
     def changeMaxSize(self):
         newSize = self.size_text.text()
@@ -246,13 +258,16 @@ class FileCleanerApp(QWidget):
         self.file_list_string.clear()
         self.dir_list.clear()
 
-        self.scan_files_recursive(self.selected_folder)
+        self.show_loading("Scanning", "Scanning files. Please wait...")
+        try:
+            self.scan_files_recursive(self.selected_folder)
+        finally:
+            self.hide_loading()
 
 
     def is_file_old(self, full_path):
         # --> returns true if the file has aged past selected time stamp #
         file_last_modified = os.path.getmtime(full_path)
-        file_created = os.path.getctime(full_path)
         
         # Check if file was modified past the selected time threshold
         current_time = time.time()
@@ -269,6 +284,10 @@ class FileCleanerApp(QWidget):
             return False
     
     def scan_files_recursive(self, folder):
+        if self.loading_dialog and self.loading_dialog.wasCanceled():
+            return
+        QApplication.processEvents()
+
         rec_dir = []
 
         #Go through the folder and add all the files to the file list
