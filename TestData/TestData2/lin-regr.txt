@@ -1,0 +1,38 @@
+
+#
+# Please edit this file by inserting your answer on the line after
+# each problem.
+#
+# do not edit the file in any other way!
+#
+
+# Reading
+
+#@ 1 -- enter 'a', 'b', or 'c'   (don't use quotes in your answers)
+c
+#@ 2 -- enter 'a', or 'b'
+a
+#@ 3 -- enter 'T' or 'F'
+F
+#@ 4 -- enter 'a', 'b', 'c', or 'd'
+b
+#@ 5 -- enter a number (rounding to the nearest integer is fine)
+29,150
+#@ 6 -- enter 'a', 'b', or 'c'
+c
+#@ 7 -- enter 'a', 'b', or 'c'
+a
+#@ 8 -- enter a number (rounding to the nearest integer is fine
+540
+#@ 9 -- enter a positive or negative number (3 significant digits is fine)
+-0.534
+#@ 10 -- enter 'Y' or 'N'
+Y
+
+
+
+
+
+
+
+

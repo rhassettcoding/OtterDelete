@@ -1,0 +1,55 @@
+Student: Hassett, Rian (ID 34113)
+Total score: 65/80
+
+part 1: Project 1: Exploration and Visualization of Sonoma Animal Shelter data 
+
+1: title/authors/intro: 8/10 (comments below)
+  The title is pretty good.  In the intro, the third paragraph seems redundant with
+  the second paragraph.
+  More needs to be said about the dataset.  A major omission is that the intro does
+  not say that the data comes from Sonoma County, California.
+  This sentence is a little strange: "How does intake type, especially for stray dogs, ...".
+  It is strange because the intake type for stray dogs is "STRAY".  
+2: initial data exploration: 6/10 (comments below)
+  Imports should immediately follow the Intro.
+  Imports should be in their own cell.
+  Have a cell for reading the data, and then another cell for initial preprocessing.
+  Don't read the data directly from the shelter URL!  This was also mentioned in
+  progress report feedback.
+  Where is the initial data exploration?  I see only some preprocessing in this section.
+  Comments about initial preprocessing should be in markdown cells, not as comments in
+  text cells.
+  Use normal text, not UPPER CASE, for comments.
+  Fix or suppress warning messages; they don't look professional.
+  Where are the 'Data Preprocessing" and "Visualization and Exploration" sections that
+  where provided in the starter notebook?  In the progress report feedback, I wrote:
+  "Where are the section headings that were supplied in the starter notebook?".
+  Where is df.info() and other basic exploration?
+3: data cleaning and preprocessing: 17/20 (comments below)
+  The preprocessing needs to be explained.
+4: data exploration and visualization: 40/50 (comments below)
+  give motivation before each output; interpretation after each output
+  The first plot ('Stray vs Non-Stray' should use value_counts() as we've done in class.
+  'Outcomes of Stray vs Non-Stray Dogs' should be done using pd.crosstab(), as done in class.
+  Since intake_type influences outcome type, you want to group by intake type, and show
+  P(outcome type | intake type).
+  Use space after ### (in "###How many stray dogs...")
+  For neutering by stray or not, crosstab was used correctly.
+  However, here it would have helped to define a new variable "fixed", which would be
+  true if the dog was either spayed or neutered.
+  Don't forget to use ; after the last plotting statement in a cell.
+  Tidy code: use blank lines systematically.
+  The days in shelter by outcome doesn't seem to have to do with strays.
+  Similarly with days in shelter and outcome condition.
+  Seeing that adopted dogs spend longer in the shelter doesn't mean that spending
+  more time in the shelter increases the chances of adoption, does it?
+5: conclusions: 7/10 (comments below)
+  This section should focus on explaining what you learned about how stray dogs
+  experience the shelter.  Did you really show that stray does spend a lot more
+  time in the shelter?  That does not appear to be true based on the box plot
+  "Days in Shelter by Intake Type".
+  Overall, some of the plots were useful, but the question asked in the intro did
+  not seem to be investigated well, unfortunately.
+6: creativity: 0/10
+participation: 0/0
+
